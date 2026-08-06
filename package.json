@@ -1,0 +1,54 @@
+{
+    "author": "Moaske",
+    "dependencies": {},
+    "keywords": [
+        "pebble-app"
+    ],
+    "name": "metro-wp8",
+    "pebble": {
+        "capabilities": [
+            "location",
+            "configurable",
+            "health"
+        ],
+        "displayName": "Metro WP8",
+        "enableMultiJS": true,
+        "messageKeys": [
+            "ACCENT_R",
+            "ACCENT_G",
+            "ACCENT_B",
+            "AQI",
+            "WEATHER_CODE",
+            "TEMP_HIGH",
+            "TEMP_LOW"
+        ],
+        "projectType": "native",
+        "resources": {
+            "media": [
+                {
+                    "file": "images/metro_wp8_icon.png",
+                    "menuIcon": true,
+                    "name": "METRO_WP8_ICON",
+                    "targetPlatforms": null,
+                    "type": "bitmap"
+                },
+                {
+                    "characterRegex": "a-m",
+                    "file": "fonts/MaterialDesignIcons-Weather.ttf",
+                    "name": "FONT_WEATHER_36",
+                    "targetPlatforms": null,
+                    "type": "font"
+                }
+            ]
+        },
+        "sdkVersion": "3",
+        "targetPlatforms": [
+            "emery"
+        ],
+        "uuid": "f34df18d-5b81-4652-9f92-22e35912c268",
+        "watchapp": {
+            "watchface": true
+        }
+    },
+    "version": "1.0.0"
+}

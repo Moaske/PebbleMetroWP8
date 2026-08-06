@@ -1,0 +1,47 @@
+[
+  {
+    "type": "heading",
+    "defaultValue": "Metro WP8  Settings"
+  },
+  {
+    "type": "section",
+    "items": [
+      {
+        "type": "heading",
+        "defaultValue": "Accent Colour"
+      },
+      {
+        "type": "select",
+        "messageKey": "accent_color",
+        "label": "Tile colour",
+        "defaultValue": "#F0A30A",
+        "options": [
+          { "label": "Amber",   "value": "#F0A30A" },
+          { "label": "Orange",  "value": "#FA6800" },
+          { "label": "Red",     "value": "#E51400" },
+          { "label": "Magenta", "value": "#FF0097" },
+          { "label": "Pink",    "value": "#E671B8" },
+          { "label": "Purple",  "value": "#7E3878" },
+          { "label": "Indigo",  "value": "#6A00FF" },
+          { "label": "Blue",    "value": "#0078D4" },
+          { "label": "Teal",    "value": "#00ABA9" },
+          { "label": "Emerald", "value": "#008A00" },
+          { "label": "Lime",    "value": "#8CBF26" },
+          { "label": "Brown",   "value": "#825A2C" },
+          { "label": "Steel",   "value": "#647687" },
+          { "label": "Cobalt",  "value": "#0050EF" },
+          { "label": "Violet",  "value": "#AA00FF" },
+          { "label": "Crimson", "value": "#A20025" }
+        ]
+      }
+    ]
+  },
+  {
+    "type": "text",
+    "defaultValue": "Steps and sleep are read directly from Pebble Health on your watch — no setup needed here. Just make sure Pebble Health is enabled in the Pebble app (Apps/Timeline tab)."
+  },
+  {
+    "type": "submit",
+    "defaultValue": "Save"
+  }
+]
