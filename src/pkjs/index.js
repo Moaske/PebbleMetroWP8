@@ -4,11 +4,15 @@
 
 var Clay = require('@rebble/clay');
 var clayConfig = require('./config.json');
+var customClay = require('./custom-clay.js');
 var messageKeys = require('message_keys');
 // autoHandleEvents:false — we send AppMessages ourselves (accent needs
 // converting from hex to R/G/B before the watch can use it, so Clay's
 // built-in auto-send isn't enough on its own).
-var clay = new Clay(clayConfig, null, { autoHandleEvents: false });
+// customClay injects a live watchface preview at the top of the settings
+// page that reacts to the accent/theme controls as they're changed — see
+// custom-clay.js for why it has to be a fully self-contained function.
+var clay = new Clay(clayConfig, customClay, { autoHandleEvents: false });
 
 // ─── AppMessage keys ──────────────────────────────────────────────────────────
 // Pulled from the generated message_keys module (built from the

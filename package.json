@@ -61,7 +61,7 @@
                     "type": "font"
                 },
                 {
-                    "file": "images/arrow-right-circle_wh28.png",
+                    "file": "images/arrow_right.png",
                     "name": "ARROW_RIGHT",
                     "targetPlatforms": null,
                     "type": "bitmap"
@@ -108,6 +108,12 @@
                     "name": "SLEEP_DARK",
                     "targetPlatforms": null,
                     "type": "bitmap"
+                },
+                {
+                    "file": "images/arrow_right_dark.png",
+                    "name": "ARROW_RIGHT_DARK",
+                    "targetPlatforms": null,
+                    "type": "bitmap"
                 }
             ]
         },
@@ -120,5 +126,5 @@
             "watchface": true
         }
     },
-    "version": "1.0.3"
+    "version": "1.1.0"
 }

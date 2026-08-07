@@ -23,8 +23,9 @@
 
 // Nav arrow: hand-drawn (circle + chevron), sized to fit the leftover
 // band below the tile grid (SCREEN_H - ROWS_BOTTOM = 28px tall).
-#define ARROW_DIAMETER  20
-#define ARROW_CENTER_X  (SCREEN_W - 4 - ARROW_DIAMETER / 2)   // 176
+// Nav arrow icon size — matches the ARROW_RIGHT / ARROW_RIGHT_DARK asset.
+#define ARROW_ICON_SIZE 28
+#define ARROW_CENTER_X  (SCREEN_W - 4 - ARROW_ICON_SIZE / 2)   // 172
 #define ARROW_CENTER_Y  (ROWS_BOTTOM + (SCREEN_H - ROWS_BOTTOM) / 2)
 
 // Tile icon sizes
@@ -199,6 +200,7 @@ static GFont s_font_weather;  // weather icon font (MDI subset)
 static GBitmap *s_icon_steps,   *s_icon_steps_dark;
 static GBitmap *s_icon_sleep,   *s_icon_sleep_dark;
 static GBitmap *s_icon_aqi,     *s_icon_aqi_dark;
+static GBitmap *s_icon_arrow,   *s_icon_arrow_dark;
 
 static GColor theme_fg(void)  { return s_theme_light ? GColorBlack : GColorWhite; }
 static GColor theme_bg(void)  { return s_theme_light ? GColorWhite : GColorBlack; }
@@ -224,7 +226,7 @@ static void draw_tile_content(GContext *ctx, TileId id, GRect r) {
       }
       // -16 overshot all the way to the top-aligned, so splitting the
       // difference back toward centre. +2px horizontal nudge added too.
-      const int TIME_Y_OFFSET = -6;
+      const int TIME_Y_OFFSET = -5;
       const int TIME_X_OFFSET = 2;
       GRect tr = GRect(inner.origin.x + TIME_X_OFFSET, inner.origin.y + TIME_Y_OFFSET, inner.size.w, inner.size.h);
       graphics_draw_text(ctx, buf, s_font_time, tr,
@@ -398,26 +400,12 @@ static void canvas_update_proc(Layer *layer, GContext *ctx) {
     }
   }
 
-  // Nav arrow: hand-drawn so it always matches the theme colour without
-  // needing a second bitmap asset — a filled circle in the foreground
-  // colour with a background-coloured chevron cut into it.
-  graphics_context_set_fill_color(ctx, theme_fg());
-  graphics_fill_circle(ctx, GPoint(ARROW_CENTER_X, ARROW_CENTER_Y), ARROW_DIAMETER / 2);
-
-  int cx = ARROW_CENTER_X, cy = ARROW_CENTER_Y;
-  int radius = ARROW_DIAMETER / 2;
-  // Chevron half-height nearly spans the circle's radius, leaving just a
-  // couple of px of margin so the tip doesn't touch the outline exactly.
-  int ch = radius - 2;
-  int cw = ch - 1;
-  GPoint p1 = GPoint(cx - cw / 2, cy - ch);
-  GPoint p2 = GPoint(cx + cw / 2, cy);
-  GPoint p3 = GPoint(cx - cw / 2, cy + ch);
-  GPathInfo chevron_info = { .num_points = 3, .points = (GPoint[]){p1, p2, p3} };
-  GPath *chevron = gpath_create(&chevron_info);
-  graphics_context_set_fill_color(ctx, theme_bg());
-  gpath_draw_filled(ctx, chevron);
-  gpath_destroy(chevron);
+  // Nav arrow: bitmap, same light/dark pair pattern as the tile icons.
+  GRect arrow_r = GRect(ARROW_CENTER_X - ARROW_ICON_SIZE / 2,
+                        ARROW_CENTER_Y - ARROW_ICON_SIZE / 2,
+                        ARROW_ICON_SIZE, ARROW_ICON_SIZE);
+  graphics_context_set_compositing_mode(ctx, GCompOpSet);
+  graphics_draw_bitmap_in_rect(ctx, s_theme_light ? s_icon_arrow_dark : s_icon_arrow, arrow_r);
 }
 
 // ─── Flip animation timers ────────────────────────────────────────────────────
@@ -566,6 +554,8 @@ static void window_load(Window *window) {
   s_icon_sleep_dark   = gbitmap_create_with_resource(RESOURCE_ID_SLEEP_DARK);
   s_icon_aqi          = gbitmap_create_with_resource(RESOURCE_ID_AQI);
   s_icon_aqi_dark     = gbitmap_create_with_resource(RESOURCE_ID_AQI_DARK);
+  s_icon_arrow        = gbitmap_create_with_resource(RESOURCE_ID_ARROW_RIGHT);
+  s_icon_arrow_dark   = gbitmap_create_with_resource(RESOURCE_ID_ARROW_RIGHT_DARK);
 
   s_canvas_layer = layer_create(bounds);
   layer_set_update_proc(s_canvas_layer, canvas_update_proc);
@@ -585,6 +575,8 @@ static void window_unload(Window *window) {
   gbitmap_destroy(s_icon_sleep_dark);
   gbitmap_destroy(s_icon_aqi);
   gbitmap_destroy(s_icon_aqi_dark);
+  gbitmap_destroy(s_icon_arrow);
+  gbitmap_destroy(s_icon_arrow_dark);
 }
 
 // ─── Init / deinit ────────────────────────────────────────────────────────────
