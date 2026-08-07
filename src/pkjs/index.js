@@ -1,23 +1,24 @@
 // ─── MetroTime companion JS ──────────────────────────────────────────────────
-// Fetches: Open-Meteo (weather + AQI), Pebble Health (steps/sleep via timeline)
-// Sends accent colour from settings via localStorage
+// Fetches: Open-Meteo (weather + AQI). Steps/sleep/battery are native on-watch
+// (HealthService / battery_state_service) — the phone never touches those.
 
-var Clay = require('pebble-clay');
+var Clay = require('@rebble/clay');
 var clayConfig = require('./config.json');
-var clay = new Clay(clayConfig);
+var messageKeys = require('message_keys');
+// autoHandleEvents:false — we send AppMessages ourselves (accent needs
+// converting from hex to R/G/B before the watch can use it, so Clay's
+// built-in auto-send isn't enough on its own).
+var clay = new Clay(clayConfig, null, { autoHandleEvents: false });
 
-// ─── AppMessage keys (must match main.c) ─────────────────────────────────────
+// ─── AppMessage keys ──────────────────────────────────────────────────────────
+// Pulled from the generated message_keys module (built from the
+// "messageKeys" array in package.json) rather than hardcoded, so this stays
+// correct even if that array's order ever changes.
 // Steps and sleep have no phone-side keys — the watch reads them natively
 // via HealthService. Battery is also read natively on-watch.
-var KEY = {
-  ACCENT_R:     0,
-  ACCENT_G:     1,
-  ACCENT_B:     2,
-  AQI:          3,
-  WEATHER_CODE: 4,
-  TEMP_HIGH:    5,
-  TEMP_LOW:     6
-};
+
+// How often to refresh weather/AQI while the watchface is active, in ms.
+var REFRESH_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
 
 // ─── WMO weather code → icon index mapping ────────────────────────────────────
 // Indices match WEATHER_ICONS[] in main.c
@@ -42,35 +43,18 @@ function wmoToIconIndex(code) {
 function hexToRGB(hex) {
   hex = hex.replace('#', '');
   return {
-    r: parseInt(hex.substring(0,2), 16),
-    g: parseInt(hex.substring(2,4), 16),
-    b: parseInt(hex.substring(4,6), 16)
+    r: parseInt(hex.substring(0, 2), 16),
+    g: parseInt(hex.substring(2, 4), 16),
+    b: parseInt(hex.substring(4, 6), 16)
   };
-}
-
-// ─── Send accent colour to watch ──────────────────────────────────────────────
-function sendAccent() {
-  var settings = clay.getSettings();
-  var hexColor = settings.accent_color || '#F0A30A';
-  var rgb = hexToRGB(hexColor);
-  var msg = {};
-  msg[KEY.ACCENT_R] = rgb.r;
-  msg[KEY.ACCENT_G] = rgb.g;
-  msg[KEY.ACCENT_B] = rgb.b;
-  Pebble.sendAppMessage(msg, function() {
-    console.log('Accent sent: ' + hexColor);
-  }, function(e) {
-    console.log('Accent send failed: ' + JSON.stringify(e));
-  });
 }
 
 // ─── Fetch weather + AQI from Open-Meteo ─────────────────────────────────────
 function fetchWeatherAndAQI(lat, lon) {
-  // Weather
   var weatherUrl = 'https://api.open-meteo.com/v1/forecast' +
     '?latitude=' + lat + '&longitude=' + lon +
     '&daily=weather_code,temperature_2m_max,temperature_2m_min' +
-    '&current=weather_code' +
+    '&current=weather_code,temperature_2m' +
     '&timezone=auto' +
     '&forecast_days=1';
 
@@ -80,29 +64,30 @@ function fetchWeatherAndAQI(lat, lon) {
     if (xhr.readyState === 4 && xhr.status === 200) {
       try {
         var data = JSON.parse(xhr.responseText);
-        var wmo      = data.daily.weather_code[0];
-        var tempHigh = Math.round(data.daily.temperature_2m_max[0]);
-        var tempLow  = Math.round(data.daily.temperature_2m_min[0]);
-        var iconIdx  = wmoToIconIndex(wmo);
+        var wmo        = data.daily.weather_code[0];
+        var tempHigh   = Math.round(data.daily.temperature_2m_max[0]);
+        var tempLow    = Math.round(data.daily.temperature_2m_min[0]);
+        var tempCurrent = Math.round(data.current.temperature_2m);
+        var iconIdx    = wmoToIconIndex(wmo);
 
         var msg = {};
-        msg[KEY.WEATHER_CODE] = iconIdx;
-        msg[KEY.TEMP_HIGH]    = tempHigh;
-        msg[KEY.TEMP_LOW]     = tempLow;
+        msg[messageKeys.WEATHER_CODE] = iconIdx;
+        msg[messageKeys.TEMP_HIGH]    = tempHigh;
+        msg[messageKeys.TEMP_LOW]     = tempLow;
+        msg[messageKeys.TEMP_CURRENT] = tempCurrent;
 
         Pebble.sendAppMessage(msg, function() {
-          console.log('Weather sent: wmo=' + wmo + ' H=' + tempHigh + ' L=' + tempLow);
+          console.log('Weather sent: wmo=' + wmo + ' cur=' + tempCurrent + ' H=' + tempHigh + ' L=' + tempLow);
         }, function(e) {
           console.log('Weather send failed: ' + JSON.stringify(e));
         });
-      } catch(e) {
+      } catch (e) {
         console.log('Weather parse error: ' + e);
       }
     }
   };
   xhr.send();
 
-  // AQI (Open-Meteo Air Quality)
   var aqiUrl = 'https://air-quality-api.open-meteo.com/v1/air-quality' +
     '?latitude=' + lat + '&longitude=' + lon +
     '&current=european_aqi' +
@@ -114,15 +99,15 @@ function fetchWeatherAndAQI(lat, lon) {
     if (xhr2.readyState === 4 && xhr2.status === 200) {
       try {
         var data = JSON.parse(xhr2.responseText);
-        var aqi  = Math.round(data.current.european_aqi);
-        var msg  = {};
-        msg[KEY.AQI] = aqi;
+        var aqi = Math.round(data.current.european_aqi);
+        var msg = {};
+        msg[messageKeys.AQI] = aqi;
         Pebble.sendAppMessage(msg, function() {
           console.log('AQI sent: ' + aqi);
         }, function(e) {
           console.log('AQI send failed: ' + JSON.stringify(e));
         });
-      } catch(e) {
+      } catch (e) {
         console.log('AQI parse error: ' + e);
       }
     }
@@ -130,22 +115,42 @@ function fetchWeatherAndAQI(lat, lon) {
   xhr2.send();
 }
 
-// ─── Main fetch orchestrator ──────────────────────────────────────────────────
-// Note: steps and sleep are NOT fetched here — the watch reads them directly
-// from its own Pebble Health data via HealthService (see main.c). The phone
-// only needs to supply accent colour, weather, and AQI (things the watch has
-// no other way to obtain on its own).
-function fetchAll() {
-  // Send accent first (instant)
-  sendAccent();
+// ─── Reverse geocode location name (BigDataCloud — same as PebbleWindsock) ───
+function fetchLocationName(lat, lon) {
+  var url = 'https://api.bigdatacloud.net/data/reverse-geocode-client' +
+    '?latitude=' + lat + '&longitude=' + lon +
+    '&localityLanguage=en';
 
-  // Then get location for weather/AQI
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', url, true);
+  xhr.onload = function() {
+    if (xhr.readyState === 4 && xhr.status === 200) {
+      try {
+        var data = JSON.parse(xhr.responseText);
+        var name = data.locality || data.city || data.principalSubdivision || '';
+        if (!name) return;
+
+        var msg = {};
+        msg[messageKeys.LOCATION] = name;
+        Pebble.sendAppMessage(msg, function() {
+          console.log('Location sent: ' + name);
+        }, function(e) {
+          console.log('Location send failed: ' + JSON.stringify(e));
+        });
+      } catch (e) {
+        console.log('Location parse error: ' + e);
+      }
+    }
+  };
+  xhr.send();
+}
+
+// ─── Location + weather/AQI refresh ──────────────────────────────────────────
+function refreshWeather() {
   navigator.geolocation.getCurrentPosition(
     function(pos) {
-      var lat = pos.coords.latitude;
-      var lon = pos.coords.longitude;
-      console.log('Location: ' + lat + ', ' + lon);
-      fetchWeatherAndAQI(lat, lon);
+      fetchWeatherAndAQI(pos.coords.latitude, pos.coords.longitude);
+      fetchLocationName(pos.coords.latitude, pos.coords.longitude);
     },
     function(err) {
       console.log('Geolocation error: ' + err.message);
@@ -155,19 +160,47 @@ function fetchAll() {
 }
 
 // ─── Pebble event listeners ───────────────────────────────────────────────────
+Pebble.addEventListener('showConfiguration', function() {
+  Pebble.openURL(clay.generateUrl());
+});
+
 Pebble.addEventListener('ready', function() {
   console.log('PebbleKit JS ready');
-  fetchAll();
+  // No accent send here — the watch already persists its own last-known
+  // accent/theme in Pebble persistent storage, so nothing to resend on a
+  // normal launch. Only weather/AQI need fetching from the phone.
+  refreshWeather();
+  setInterval(refreshWeather, REFRESH_INTERVAL_MS);
 });
 
 Pebble.addEventListener('appmessage', function(e) {
   console.log('Message from watch: ' + JSON.stringify(e.payload));
 });
 
-// Clay fires this when settings are saved
+// Settings page closed — Clay's own auto-handling is off, so we read the
+// response ourselves, convert accent hex -> RGB, and send everything the
+// watch actually needs in one AppMessage.
 Pebble.addEventListener('webviewclosed', function(e) {
-  if (e && e.response) {
-    clay.handleResponse(e.response);
-    fetchAll(); // re-send with new accent + refetch data
+  if (!e || !e.response) {
+    return; // user cancelled without saving
   }
+
+  var settings = clay.getSettings(e.response); // keyed by numeric messageKey
+  var hex   = settings[messageKeys.accent_color] || '#F0A30A';
+  var theme = settings[messageKeys.theme_select]; // 'dark' or 'light'
+  var rgb   = hexToRGB(hex);
+
+  var msg = {};
+  msg[messageKeys.ACCENT_R] = rgb.r;
+  msg[messageKeys.ACCENT_G] = rgb.g;
+  msg[messageKeys.ACCENT_B] = rgb.b;
+  msg[messageKeys.THEME]    = (theme === 'light') ? 1 : 0;
+
+  Pebble.sendAppMessage(msg, function() {
+    console.log('Settings sent: accent=' + hex + ' theme=' + theme);
+  }, function(err) {
+    console.log('Settings send failed: ' + JSON.stringify(err));
+  });
+
+  refreshWeather();
 });

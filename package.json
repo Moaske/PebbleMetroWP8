@@ -1,6 +1,8 @@
 {
     "author": "Moaske",
-    "dependencies": {},
+    "dependencies": {
+        "@rebble/clay": "^1.0.10"
+    },
     "keywords": [
         "pebble-app"
     ],
@@ -20,11 +22,68 @@
             "AQI",
             "WEATHER_CODE",
             "TEMP_HIGH",
-            "TEMP_LOW"
+            "TEMP_LOW",
+            "THEME",
+            "accent_color",
+            "theme_select",
+            "TEMP_CURRENT",
+            "LOCATION"
         ],
         "projectType": "native",
         "resources": {
             "media": [
+                {
+                    "characterRegex": "[a-m]",
+                    "file": "fonts/MaterialDesignIcons-Weather.ttf",
+                    "name": "FONT_WEATHER_36",
+                    "targetPlatforms": null,
+                    "type": "font"
+                },
+                {
+                    "characterRegex": "[0-9A-Za-z%\u00b0/]",
+                    "file": "fonts/segoeui.ttf",
+                    "name": "FONT_REGULAR_12",
+                    "targetPlatforms": null,
+                    "type": "font"
+                },
+                {
+                    "characterRegex": "[0-9A-Za-z%\u00b0/]",
+                    "file": "fonts/segoeuib.ttf",
+                    "name": "FONT_BOLD_18",
+                    "targetPlatforms": null,
+                    "type": "font"
+                },
+                {
+                    "characterRegex": "[0-9:.]",
+                    "file": "fonts/segoeuisl.ttf",
+                    "name": "FONT_TIME_52",
+                    "targetPlatforms": null,
+                    "type": "font"
+                },
+                {
+                    "file": "images/arrow-right-circle_wh28.png",
+                    "name": "ARROW_RIGHT",
+                    "targetPlatforms": null,
+                    "type": "bitmap"
+                },
+                {
+                    "file": "images/steps.png",
+                    "name": "STEPS",
+                    "targetPlatforms": null,
+                    "type": "bitmap"
+                },
+                {
+                    "file": "images/sleep.png",
+                    "name": "SLEEP",
+                    "targetPlatforms": null,
+                    "type": "bitmap"
+                },
+                {
+                    "file": "images/aqi.png",
+                    "name": "AQI",
+                    "targetPlatforms": null,
+                    "type": "bitmap"
+                },
                 {
                     "file": "images/metro_wp8_icon.png",
                     "menuIcon": true,
@@ -33,35 +92,22 @@
                     "type": "bitmap"
                 },
                 {
-                    "characterRegex": "a-m",
-                    "file": "fonts/MaterialDesignIcons-Weather.ttf",
-                    "name": "FONT_WEATHER_36",
+                    "file": "images/aqi_dark.png",
+                    "name": "AQI_DARK",
                     "targetPlatforms": null,
-                    "type": "font"
+                    "type": "bitmap"
                 },
                 {
-                    "characterRegex": "0-9A-Za-z%\u00b0/",
-                    "file": "fonts/segoeui.ttf",
-                    "name": "FONT_REGULAR_12",
-                    "size": 12,
+                    "file": "images/steps_dark.png",
+                    "name": "STEPS_DARK",
                     "targetPlatforms": null,
-                    "type": "font"
+                    "type": "bitmap"
                 },
                 {
-                    "characterRegex": "0-9A-Za-z%\u00b0/",
-                    "file": "fonts/segoeuib.ttf",
-                    "name": "FONT_BOLD_18",
-                    "size": 18,
+                    "file": "images/sleep_dark.png",
+                    "name": "SLEEP_DARK",
                     "targetPlatforms": null,
-                    "type": "font"
-                },
-                {
-                    "characterRegex": "0-9:.",
-                    "file": "fonts/segoeuisl.ttf",
-                    "name": "FONT_TIME_52",
-                    "size": 52,
-                    "targetPlatforms": null,
-                    "type": "font"
+                    "type": "bitmap"
                 }
             ]
         },
@@ -74,5 +120,5 @@
             "watchface": true
         }
     },
-    "version": "1.0.0"
+    "version": "1.0.3"
 }

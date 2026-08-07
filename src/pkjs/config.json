@@ -1,7 +1,7 @@
 [
   {
     "type": "heading",
-    "defaultValue": "Metro WP8  Settings"
+    "defaultValue": "MetroTime Settings"
   },
   {
     "type": "section",
@@ -32,6 +32,25 @@
           { "label": "Cobalt",  "value": "#0050EF" },
           { "label": "Violet",  "value": "#AA00FF" },
           { "label": "Crimson", "value": "#A20025" }
+        ]
+      }
+    ]
+  },
+  {
+    "type": "section",
+    "items": [
+      {
+        "type": "heading",
+        "defaultValue": "Theme"
+      },
+      {
+        "type": "radiogroup",
+        "messageKey": "theme_select",
+        "label": "Style",
+        "defaultValue": "dark",
+        "options": [
+          { "label": "Dark (black background, white text)", "value": "dark" },
+          { "label": "Light (white background, black text)", "value": "light" }
         ]
       }
     ]
