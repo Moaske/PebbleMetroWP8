@@ -4,7 +4,7 @@
         "@rebble/clay": "^1.0.10"
     },
     "keywords": [
-        "pebble-app"
+        "pebble-app", "windows-phone", "metro"
     ],
     "name": "metro-wp8",
     "pebble": {
