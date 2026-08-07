@@ -68,11 +68,21 @@ function fetchWeatherAndAQI(lat, lon) {
     if (xhr.readyState === 4 && xhr.status === 200) {
       try {
         var data = JSON.parse(xhr.responseText);
-        var wmo        = data.daily.weather_code[0];
+        // The icon must reflect what's happening RIGHT NOW, so it needs
+        // data.current.weather_code — NOT data.daily.weather_code[0].
+        // The daily field is Open-Meteo's own "representative" summary
+        // judgment for the whole day (which can easily be dominated by
+        // cloud/rain forecast for later even while it's sunny right now),
+        // which is exactly why a genuinely sunny moment could render as a
+        // cloud: the request already asked for current=weather_code (it
+        // has to, for temperature_2m), the field was right there in the
+        // response, it just was never being read for the icon.
+        var wmoCurrent = data.current.weather_code;
+        var wmoDaily   = data.daily.weather_code[0];
         var tempHigh   = Math.round(data.daily.temperature_2m_max[0]);
         var tempLow    = Math.round(data.daily.temperature_2m_min[0]);
         var tempCurrent = Math.round(data.current.temperature_2m);
-        var iconIdx    = wmoToIconIndex(wmo);
+        var iconIdx    = wmoToIconIndex(wmoCurrent);
 
         var msg = {};
         msg[messageKeys.WEATHER_CODE] = iconIdx;
@@ -81,7 +91,8 @@ function fetchWeatherAndAQI(lat, lon) {
         msg[messageKeys.TEMP_CURRENT] = tempCurrent;
 
         Pebble.sendAppMessage(msg, function() {
-          console.log('Weather sent: wmo=' + wmo + ' cur=' + tempCurrent + ' H=' + tempHigh + ' L=' + tempLow);
+          console.log('Weather sent: wmoCurrent=' + wmoCurrent + ' wmoDaily=' + wmoDaily +
+                      ' icon=' + iconIdx + ' cur=' + tempCurrent + ' H=' + tempHigh + ' L=' + tempLow);
         }, function(e) {
           console.log('Weather send failed: ' + JSON.stringify(e));
         });
