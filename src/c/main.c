@@ -275,7 +275,7 @@ static void draw_tile_content(GContext *ctx, TileId id, GRect r) {
       // whole block look off-centre hugging the left edge before.
       int left_margin = 6;
       int top = inner.origin.y + 14; // pushed down to make room for the label above
-      GRect icon_r = GRect(inner.origin.x + left_margin, top, 36, 38);
+      GRect icon_r = GRect(inner.origin.x + left_margin, top - 3, 36, 38);
       graphics_draw_text(ctx, WEATHER_ICONS[s_wmo_icon < 13 ? s_wmo_icon : 0], s_font_weather, icon_r,
                          GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
 
@@ -283,8 +283,9 @@ static void draw_tile_content(GContext *ctx, TileId id, GRect r) {
       int tw = inner.size.w - left_margin - 40;
 
       // Top line (bold): current temperature
+      // +4 shift to line up with the icon (which sits at top-3).
       snprintf(buf, sizeof(buf), "%d\u00B0C", s_temp_current);
-      GRect cur_r = GRect(tx, top, tw, 22);
+      GRect cur_r = GRect(tx, top + 4, tw, 22);
       graphics_draw_text(ctx, buf, s_font_med, cur_r,
                          GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
 
@@ -295,7 +296,7 @@ static void draw_tile_content(GContext *ctx, TileId id, GRect r) {
       // stray character below the tile the same way the sleep tile's "m"
       // did — ellipsis truncates safely in place instead.
       snprintf(buf, sizeof(buf), "H %d\u00B0C L %d\u00B0C", s_temp_high, s_temp_low);
-      GRect hl_r = GRect(tx, top + 22, tw, 20);
+      GRect hl_r = GRect(tx, top + 26, tw, inner.size.h - (top + 26 - inner.origin.y));
       graphics_draw_text(ctx, buf, s_font_sm, hl_r,
                          GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
       break;
