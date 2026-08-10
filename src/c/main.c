@@ -49,6 +49,7 @@
 #define KEY_THEME        MESSAGE_KEY_THEME
 #define KEY_LOCATION      MESSAGE_KEY_LOCATION   // city name, string
 #define KEY_PHONE_BATTERY MESSAGE_KEY_PHONE_BATTERY   // 0-100, or absent until phone sends one
+#define KEY_PHONE_CHARGING MESSAGE_KEY_PHONE_CHARGING // 0/1
 // Steps, sleep, and battery are read natively on-watch (HealthService /
 // battery_state_service) — they never come over AppMessage.
 
@@ -99,6 +100,7 @@ static int  s_temp_low  = 0;
 static int  s_temp_current = 0;
 static char s_location[32] = "";
 static int  s_phone_battery = -1; // -1 = not received from phone yet
+static bool s_phone_charging = false;
 
 // Data (steps/sleep read natively from Pebble HealthService — no phone needed)
 static int  s_steps     = 0;
@@ -398,12 +400,19 @@ static void draw_tile_content(GContext *ctx, TileId id, GRect r) {
 
       // Phone gauge — s_phone_battery is -1 until the phone has actually
       // sent a value at least once (e.g. right after a fresh install).
+      // While charging, the text swaps to "CHRG" instead of the rising
+      // percentage — the bar still tracks the real charge level either
+      // way, so you can see both "is it plugged in" and "how full is it"
+      // at a glance.
       GRect p_icon_r = GRect(inner.origin.x, phone_text_y - 1, icon_col_w, text_h + 2);
       graphics_draw_text(ctx, "o", s_font_icons_mini, p_icon_r,
                          GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
       GRect p_txt_r = GRect(inner.origin.x + icon_col_w, phone_text_y, inner.size.w - icon_col_w, text_h);
       if (s_phone_battery < 0) {
         graphics_draw_text(ctx, "--", s_font_sm, p_txt_r,
+                           GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
+      } else if (s_phone_charging) {
+        graphics_draw_text(ctx, "CHRG", s_font_sm, p_txt_r,
                            GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
       } else {
         snprintf(buf, sizeof(buf), "%d%%", s_phone_battery);
@@ -567,6 +576,10 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
 
   if ((t = dict_find(iter, KEY_PHONE_BATTERY))) {
     s_phone_battery = t->value->int32;
+  }
+
+  if ((t = dict_find(iter, KEY_PHONE_CHARGING))) {
+    s_phone_charging = (t->value->int32 == 1);
   }
 
   layer_mark_dirty(s_canvas_layer);

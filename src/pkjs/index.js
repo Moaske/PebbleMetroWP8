@@ -1,4 +1,4 @@
-// ─── Metro WP8 companion JS ──────────────────────────────────────────────────
+// ─── MetroTime companion JS ──────────────────────────────────────────────────
 // Fetches: Open-Meteo (weather + AQI). Steps/sleep/battery are native on-watch
 // (HealthService / battery_state_service) — the phone never touches those.
 
@@ -171,8 +171,9 @@ function sendPhoneBattery(battery) {
   var pct = Math.round(battery.level * 100);
   var msg = {};
   msg[messageKeys.PHONE_BATTERY] = pct;
+  msg[messageKeys.PHONE_CHARGING] = battery.charging ? 1 : 0;
   Pebble.sendAppMessage(msg, function() {
-    console.log('Phone battery sent: ' + pct + '%');
+    console.log('Phone battery sent: ' + pct + '% charging=' + battery.charging);
   }, function(e) {
     console.log('Phone battery send failed: ' + JSON.stringify(e));
   });
