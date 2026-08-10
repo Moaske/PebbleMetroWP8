@@ -48,6 +48,7 @@
 #define KEY_TEMP_CURRENT MESSAGE_KEY_TEMP_CURRENT
 #define KEY_THEME        MESSAGE_KEY_THEME
 #define KEY_LOCATION      MESSAGE_KEY_LOCATION   // city name, string
+#define KEY_PHONE_BATTERY MESSAGE_KEY_PHONE_BATTERY   // 0-100, or absent until phone sends one
 // Steps, sleep, and battery are read natively on-watch (HealthService /
 // battery_state_service) — they never come over AppMessage.
 
@@ -97,6 +98,7 @@ static int  s_temp_high = 0;
 static int  s_temp_low  = 0;
 static int  s_temp_current = 0;
 static char s_location[32] = "";
+static int  s_phone_battery = -1; // -1 = not received from phone yet
 
 // Data (steps/sleep read natively from Pebble HealthService — no phone needed)
 static int  s_steps     = 0;
@@ -191,6 +193,7 @@ static GFont s_font_time;     // large thin font for time digits
 static GFont s_font_med;      // medium bold for values
 static GFont s_font_sm;       // small for labels / sub-values
 static GFont s_font_weather;  // weather icon font (MDI subset)
+static GFont s_font_icons_mini; // battery tile watch/phone icons (MDI subset)
 
 // Two variants of each tile icon: white (dark theme) and black (light
 // theme). Pebble's color compositing has no software color-invert for
@@ -226,6 +229,8 @@ static void draw_tile_content(GContext *ctx, TileId id, GRect r) {
       }
       // -16 overshot all the way to the top-aligned, so splitting the
       // difference back toward centre. +2px horizontal nudge added too.
+      // Confirmed against the actual repo: settled at -5 after a further
+      // manual nudge beyond the -8 this comment used to say.
       const int TIME_Y_OFFSET = -5;
       const int TIME_X_OFFSET = 2;
       GRect tr = GRect(inner.origin.x + TIME_X_OFFSET, inner.origin.y + TIME_Y_OFFSET, inner.size.w, inner.size.h);
@@ -344,32 +349,75 @@ static void draw_tile_content(GContext *ctx, TileId id, GRect r) {
 
     case TILE_BATTERY: {
       BatteryChargeState bat = battery_state_service_peek();
-      int pct = bat.charge_percent;
+      int watch_pct = bat.charge_percent;
       GRect lbl_r = GRect(inner.origin.x, inner.origin.y, inner.size.w, 12);
       graphics_draw_text(ctx, "BATT", s_font_sm, lbl_r,
                          GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
 
-      // AQI/STEPS/SLEEP all put their 25x25 icon at y+13 (ending y+38) and
-      // their value text starting at y+40. Battery has no icon, but the
-      // bar sits centred in that same y+13..y+38 band, and the percentage
-      // starts at the same y+40 as the other tiles' values — so the whole
-      // bottom row reads as one aligned grid rather than battery's text
-      // sitting at a different height than its neighbours.
-      int bar_y = inner.origin.y + 13 + (TILE_ICON_SIZE - 7) / 2; // vertically centred in the icon band
-      int bar_h = 7;
-      int bar_w = inner.size.w;
-      GRect bar_bg = GRect(inner.origin.x, bar_y, bar_w, bar_h);
-      graphics_context_set_fill_color(ctx, s_theme_light ? GColorFromRGB(200,200,200) : GColorFromRGB(90, 90, 90));
-      graphics_fill_rect(ctx, bar_bg, 2, GCornersAll);
-      int fill_w = (bar_w * pct) / 100;
-      GRect bar_fg = GRect(inner.origin.x, bar_y, fill_w, bar_h);
-      graphics_context_set_fill_color(ctx, fg);
-      graphics_fill_rect(ctx, bar_fg, 2, GCornersAll);
+      // Two compact gauges below the title: watch on top, phone below.
+      // Text reverts to the small title font (s_font_sm) rather than the
+      // bigger value font — that's what actually makes room for two full
+      // rows in a 64px tile — and bars are thinner (5px vs the old
+      // single-gauge 7px) for the same reason.
+      int text_h = 10;
+      int bar_h  = 5;
+      int bar_w  = inner.size.w;
 
-      snprintf(buf, sizeof(buf), "%d%%", pct);
-      GRect pct_r = GRect(inner.origin.x, inner.origin.y + 40, inner.size.w, inner.size.h - 40);
-      graphics_draw_text(ctx, buf, s_font_med, pct_r,
+      // Text-to-bar gap pushed to 4px — 2px wasn't visibly different from
+      // the original 1px (same font-metric issue as the time tile: the
+      // text's own box has more baked-in headroom than its visible ink,
+      // so a small numeric change doesn't always read as a visible one).
+      // This uses the full remaining slack, landing the bottom bar flush
+      // with the tile's inner edge rather than leaving more unused margin.
+      int watch_text_y = inner.origin.y + 18;
+      int watch_bar_y  = watch_text_y + text_h + 4;
+      int phone_text_y = watch_bar_y + bar_h + 2;
+      int phone_bar_y  = phone_text_y + text_h + 4;
+
+      GColor track_col = s_theme_light ? GColorFromRGB(200,200,200) : GColorFromRGB(90, 90, 90);
+
+      // Icon glyphs sit at the left of each label row, percentage text
+      // starts right after. icon_col_w reserves the space for the glyph
+      // plus a small gap before the text.
+      int icon_col_w = 14;
+
+      // Watch gauge
+      GRect w_icon_r = GRect(inner.origin.x, watch_text_y - 1, icon_col_w, text_h + 2);
+      graphics_draw_text(ctx, "n", s_font_icons_mini, w_icon_r,
                          GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
+      snprintf(buf, sizeof(buf), "%d%%", watch_pct);
+      GRect w_txt_r = GRect(inner.origin.x + icon_col_w, watch_text_y, inner.size.w - icon_col_w, text_h);
+      graphics_draw_text(ctx, buf, s_font_sm, w_txt_r,
+                         GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
+      GRect w_bar_bg = GRect(inner.origin.x, watch_bar_y, bar_w, bar_h);
+      graphics_context_set_fill_color(ctx, track_col);
+      graphics_fill_rect(ctx, w_bar_bg, 2, GCornersAll);
+      GRect w_bar_fg = GRect(inner.origin.x, watch_bar_y, (bar_w * watch_pct) / 100, bar_h);
+      graphics_context_set_fill_color(ctx, fg);
+      graphics_fill_rect(ctx, w_bar_fg, 2, GCornersAll);
+
+      // Phone gauge — s_phone_battery is -1 until the phone has actually
+      // sent a value at least once (e.g. right after a fresh install).
+      GRect p_icon_r = GRect(inner.origin.x, phone_text_y - 1, icon_col_w, text_h + 2);
+      graphics_draw_text(ctx, "o", s_font_icons_mini, p_icon_r,
+                         GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
+      GRect p_txt_r = GRect(inner.origin.x + icon_col_w, phone_text_y, inner.size.w - icon_col_w, text_h);
+      if (s_phone_battery < 0) {
+        graphics_draw_text(ctx, "--", s_font_sm, p_txt_r,
+                           GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
+      } else {
+        snprintf(buf, sizeof(buf), "%d%%", s_phone_battery);
+        graphics_draw_text(ctx, buf, s_font_sm, p_txt_r,
+                           GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
+      }
+      GRect p_bar_bg = GRect(inner.origin.x, phone_bar_y, bar_w, bar_h);
+      graphics_context_set_fill_color(ctx, track_col);
+      graphics_fill_rect(ctx, p_bar_bg, 2, GCornersAll);
+      if (s_phone_battery >= 0) {
+        GRect p_bar_fg = GRect(inner.origin.x, phone_bar_y, (bar_w * s_phone_battery) / 100, bar_h);
+        graphics_context_set_fill_color(ctx, fg);
+        graphics_fill_rect(ctx, p_bar_fg, 2, GCornersAll);
+      }
       break;
     }
 
@@ -517,6 +565,10 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
     s_location[sizeof(s_location) - 1] = '\0';
   }
 
+  if ((t = dict_find(iter, KEY_PHONE_BATTERY))) {
+    s_phone_battery = t->value->int32;
+  }
+
   layer_mark_dirty(s_canvas_layer);
 }
 
@@ -548,6 +600,7 @@ static void window_load(Window *window) {
   s_font_med     = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_BOLD_18));
   s_font_sm      = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_REGULAR_12));
   s_font_weather = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_WEATHER_36));
+  s_font_icons_mini = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ICONS_MINI_12));
 
   s_icon_steps        = gbitmap_create_with_resource(RESOURCE_ID_STEPS);
   s_icon_steps_dark   = gbitmap_create_with_resource(RESOURCE_ID_STEPS_DARK);
@@ -569,6 +622,7 @@ static void window_unload(Window *window) {
   fonts_unload_custom_font(s_font_med);
   fonts_unload_custom_font(s_font_sm);
   fonts_unload_custom_font(s_font_weather);
+  fonts_unload_custom_font(s_font_icons_mini);
 
   gbitmap_destroy(s_icon_steps);
   gbitmap_destroy(s_icon_steps_dark);

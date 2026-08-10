@@ -1,4 +1,4 @@
-// ─── MetroTime companion JS ──────────────────────────────────────────────────
+// ─── Metro WP8 companion JS ──────────────────────────────────────────────────
 // Fetches: Open-Meteo (weather + AQI). Steps/sleep/battery are native on-watch
 // (HealthService / battery_state_service) — the phone never touches those.
 
@@ -160,6 +160,42 @@ function fetchLocationName(lat, lon) {
   xhr.send();
 }
 
+// ─── Phone battery ────────────────────────────────────────────────────────────
+// Not a Pebble API — this is the standard HTML5 Battery Status API
+// (navigator.getBattery() / the older navigator.battery). It's deprecated
+// on the open web (most browsers dropped it around 2016 over fingerprinting
+// concerns), but PebbleKit JS's own runtime isn't a regular browser tab and
+// has historically supported it — same approach other Pebble companion
+// apps have used to report phone battery to the watch.
+function sendPhoneBattery(battery) {
+  var pct = Math.round(battery.level * 100);
+  var msg = {};
+  msg[messageKeys.PHONE_BATTERY] = pct;
+  Pebble.sendAppMessage(msg, function() {
+    console.log('Phone battery sent: ' + pct + '%');
+  }, function(e) {
+    console.log('Phone battery send failed: ' + JSON.stringify(e));
+  });
+}
+
+function initPhoneBattery() {
+  function attach(battery) {
+    sendPhoneBattery(battery); // send once immediately
+    battery.addEventListener('levelchange', function() { sendPhoneBattery(battery); });
+    battery.addEventListener('chargingchange', function() { sendPhoneBattery(battery); });
+  }
+
+  if (navigator.getBattery) {
+    navigator.getBattery().then(attach, function() {
+      console.log('Phone battery: getBattery() promise rejected');
+    });
+  } else if (navigator.battery) {
+    attach(navigator.battery);
+  } else {
+    console.log('Phone battery: Battery Status API not available in this runtime');
+  }
+}
+
 // ─── Location + weather/AQI refresh ──────────────────────────────────────────
 function refreshWeather() {
   navigator.geolocation.getCurrentPosition(
@@ -186,6 +222,7 @@ Pebble.addEventListener('ready', function() {
   // normal launch. Only weather/AQI need fetching from the phone.
   refreshWeather();
   setInterval(refreshWeather, REFRESH_INTERVAL_MS);
+  initPhoneBattery();
 });
 
 Pebble.addEventListener('appmessage', function(e) {
