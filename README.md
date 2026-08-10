@@ -9,7 +9,7 @@ For Pebble Time 2 only (Emery / Obelix).
 - Light and Dark theme
 - 16 Accent colours
 - 2 Random tiles flip once each, every time you flick your wrist (or when the light comes on)
-- Preview of your settings in the settings screen
+- Preview of your settings in the settings screen (see phone screen below)
 
 <img src="https://github.com/Moaske/PebbleMetroWP8/blob/main/docs/metrowp8_animated.gif">&nbsp;&nbsp;&nbsp;<img src="https://github.com/Moaske/PebbleMetroWP8/blob/main/docs/metrowp8_1.png"></img>&nbsp;&nbsp;&nbsp;
 <img src="https://github.com/Moaske/PebbleMetroWP8/blob/main/docs/metrowp8_2.png"></img>&nbsp;&nbsp;&nbsp;<img src="https://github.com/Moaske/PebbleMetroWP8/blob/main/docs/metrowp8_3.png"></img>&nbsp;&nbsp;&nbsp;<img src="https://github.com/Moaske/PebbleMetroWP8/blob/main/docs/metrowp8_4.png"></img>&nbsp;&nbsp;&nbsp;<img src="https://github.com/Moaske/PebbleMetroWP8/blob/main/docs/metrowp8_5.png">
