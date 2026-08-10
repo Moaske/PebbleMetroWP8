@@ -3,7 +3,7 @@ Retro Windows Phone 8 Metro style watchface.
 For Pebble Time 2 only (Emery / Obelix).
 
 ## Features
-- Clock (follows watch settings for 12/24h) tile and weekday/date tile.
+- Clock tile (follows watch settings for 12/24h) and weekday/date tile.
 - Air Quality Index tile, location based Weather tile (weather-code icon, current temp and H/L temps)
 - Daily Steps tile, Daily Sleep total tile, Battery status tile (Pebble AND Phone! Will also show CHRG for Phone)
 - Light and Dark theme
