@@ -14,6 +14,10 @@ For Pebble Time 2 only (Emery / Obelix).
 <img src="https://github.com/Moaske/PebbleMetroWP8/blob/main/docs/metrowp8_animated.gif">&nbsp;&nbsp;&nbsp;<img src="https://github.com/Moaske/PebbleMetroWP8/blob/main/docs/metrowp8_1.png"></img>&nbsp;&nbsp;&nbsp;
 <img src="https://github.com/Moaske/PebbleMetroWP8/blob/main/docs/metrowp8_2.png"></img>&nbsp;&nbsp;&nbsp;<img src="https://github.com/Moaske/PebbleMetroWP8/blob/main/docs/metrowp8_3.png"></img>&nbsp;&nbsp;&nbsp;<img src="https://github.com/Moaske/PebbleMetroWP8/blob/main/docs/metrowp8_4.png"></img>&nbsp;&nbsp;&nbsp;<img src="https://github.com/Moaske/PebbleMetroWP8/blob/main/docs/metrowp8_5.png">
 
+And here's a glyph preview of all the MDI weather icons available in the weather tile:
+
+<img src="https://github.com/Moaske/PebbleMetroWP8/blob/main/docs/glyph-preview.png">
+
 ## Phone settings screen
 
 Don't forget to SAVE after you set 😊
