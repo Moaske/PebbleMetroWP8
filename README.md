@@ -1,6 +1,7 @@
 # Pebble Metro WP8
 Retro Windows Phone 8 Metro style watchface.
-For Pebble Time 2 only (Emery / Obelix).
+For Pebble Time 2 only (Emery / Obelix).<br>
+Current version: 1.2.1
 
 ## Features
 - Clock tile (follows watch settings for 12/24h) and weekday/date tile.
