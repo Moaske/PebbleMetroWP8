@@ -11,6 +11,53 @@
 module.exports = function(minified) {
   var clayConfig = this;
 
+  // ─── Settings page text translations ───────────────────────────────────────
+  // Only two "text" blocks and the Save button carry translatable copy —
+  // everything else on this page (labels, option names) comes from Clay's
+  // own config.json values, which aren't localized here.
+  //
+  // Unlike the watch-side weekday labels, there's no ASCII-only constraint
+  // here: this settings page is a full webview with normal web font/Unicode
+  // support, so proper accented characters are used throughout. That
+  // restriction only ever applied to text baked into a Pebble font resource.
+  var CONFIG_I18N = {
+    en: {
+      dateOrderHelp: 'The weekday name still follows your watch\'s language setting — this only controls the day/month order below it. Useful since the Pebble app\'s language picker doesn\'t distinguish English regions (e.g. UK vs US), so "English" alone doesn\'t tell us which date order you actually use.',
+      healthHelp: 'Steps and sleep are read directly from Pebble Health on your watch — no setup needed here. Just make sure Pebble Health is enabled in the Pebble app (Apps/Timeline tab).',
+      save: 'Save'
+    },
+    fr: {
+      dateOrderHelp: 'Le nom du jour suit toujours le réglage de langue de votre montre — ceci contrôle uniquement l\'ordre jour/mois ci-dessous. Utile car le sélecteur de langue de l\'application Pebble ne distingue pas les régions anglophones (ex. Royaume-Uni vs États-Unis), donc « Anglais » seul ne nous indique pas quel ordre de date vous utilisez réellement.',
+      healthHelp: 'Les pas et le sommeil sont lus directement depuis Pebble Health sur votre montre — aucune configuration n\'est nécessaire ici. Assurez-vous simplement que Pebble Health est activé dans l\'application Pebble (onglet Apps/Timeline).',
+      save: 'Enregistrer'
+    },
+    de: {
+      dateOrderHelp: 'Der Wochentagsname folgt weiterhin der Spracheinstellung deiner Uhr — dies steuert nur die Tag/Monat-Reihenfolge unten. Nützlich, da die Sprachauswahl der Pebble-App nicht zwischen englischsprachigen Regionen unterscheidet (z. B. UK vs. USA), sodass „Englisch" allein uns nicht sagt, welches Datumsformat du tatsächlich verwendest.',
+      healthHelp: 'Schritte und Schlaf werden direkt von Pebble Health auf deiner Uhr gelesen — hier ist keine Einrichtung nötig. Stelle nur sicher, dass Pebble Health in der Pebble-App aktiviert ist (Registerkarte Apps/Timeline).',
+      save: 'Speichern'
+    },
+    es: {
+      dateOrderHelp: 'El nombre del día de la semana sigue el idioma configurado en tu reloj — esto solo controla el orden día/mes de abajo. Es útil porque el selector de idioma de la app Pebble no distingue regiones de habla inglesa (p. ej. Reino Unido vs. EE. UU.), así que «Inglés» por sí solo no nos indica qué formato de fecha usas realmente.',
+      healthHelp: 'Los pasos y el sueño se leen directamente desde Pebble Health en tu reloj — no es necesario configurar nada aquí. Solo asegúrate de que Pebble Health esté activado en la app Pebble (pestaña Apps/Timeline).',
+      save: 'Guardar'
+    },
+    it: {
+      dateOrderHelp: 'Il nome del giorno della settimana segue sempre l\'impostazione della lingua del tuo orologio — questo controlla solo l\'ordine giorno/mese qui sotto. Utile perché il selettore di lingua dell\'app Pebble non distingue le regioni anglofone (es. Regno Unito vs Stati Uniti), quindi «Inglese» da solo non ci dice quale formato data usi realmente.',
+      healthHelp: 'Passi e sonno vengono letti direttamente da Pebble Health sul tuo orologio — nessuna configurazione necessaria qui. Assicurati solo che Pebble Health sia attivato nell\'app Pebble (scheda App/Timeline).',
+      save: 'Salva'
+    },
+    nl: {
+      dateOrderHelp: 'De naam van de weekdag volgt nog steeds de taalinstelling van je horloge — dit bepaalt alleen de dag/maand-volgorde hieronder. Handig omdat de taalkeuze in de Pebble-app geen onderscheid maakt tussen Engelstalige regio\'s (bijv. VK vs VS), waardoor "Engels" alleen niet aangeeft welke datumnotatie je daadwerkelijk gebruikt.',
+      healthHelp: 'Stappen en slaap worden rechtstreeks van Pebble Health op je horloge gelezen — hier is geen instelling voor nodig. Zorg er alleen voor dat Pebble Health is ingeschakeld in de Pebble-app (tabblad Apps/Tijdlijn).',
+      save: 'Opslaan'
+    },
+    pt: {
+      dateOrderHelp: 'O nome do dia da semana continua a seguir a definição de idioma do seu relógio — isto controla apenas a ordem dia/mês abaixo. Útil porque o seletor de idioma da app Pebble não distingue regiões de língua inglesa (ex. Reino Unido vs. EUA), pelo que "Inglês" sozinho não nos diz qual formato de data realmente usa.',
+      healthHelp: 'Os passos e o sono são lidos diretamente do Pebble Health no seu relógio — não é necessária qualquer configuração aqui. Certifique-se apenas de que o Pebble Health está ativado na app Pebble (separador Apps/Timeline).',
+      save: 'Guardar'
+    }
+  };
+
   var previewHtml =
     '<style>' +
     '.mtprev-wrap { display:flex; flex-direction:column; align-items:center; padding:14px 0 18px; }' +
@@ -187,5 +234,52 @@ module.exports = function(minified) {
     }
     tick();
     setInterval(tick, 15000);
+
+    // ─── Translate the settings page text ────────────────────────────────────
+    // Clay's config.json has no built-in per-item localization, so this
+    // finds the two known English "text" blocks (and the Save button) by
+    // their exact source content and swaps in a translated string if the
+    // phone's language has one. navigator.language is the standard web API
+    // for this — confirmed as the documented approach for phone language
+    // detection in PebbleKit JS contexts. Falls back to leaving the
+    // English default text in place for any unsupported language, since
+    // that's already what's rendered before this runs.
+    var phoneLang = ((navigator.language || 'en').split(/[-_]/)[0] || 'en').toLowerCase();
+    var strings = CONFIG_I18N[phoneLang] || CONFIG_I18N.en;
+
+    function replaceTextNode(oldText, newText) {
+      if (!newText || oldText === newText) return;
+      var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
+      var node;
+      while ((node = walker.nextNode())) {
+        if (node.textContent.trim() === oldText.trim()) {
+          node.textContent = newText;
+          return;
+        }
+      }
+    }
+
+    function setButtonLabel(oldLabel, newLabel) {
+      if (!newLabel || oldLabel === newLabel) return;
+      var candidates = document.querySelectorAll('button, input[type="submit"], input[type="button"]');
+      for (var i = 0; i < candidates.length; i++) {
+        var el = candidates[i];
+        var current = (el.tagName === 'INPUT') ? el.value : el.textContent;
+        if (current && current.trim() === oldLabel) {
+          if (el.tagName === 'INPUT') {
+            el.value = newLabel;
+          } else {
+            el.textContent = newLabel;
+          }
+          return;
+        }
+      }
+    }
+
+    if (phoneLang !== 'en') {
+      replaceTextNode(CONFIG_I18N.en.dateOrderHelp, strings.dateOrderHelp);
+      replaceTextNode(CONFIG_I18N.en.healthHelp, strings.healthHelp);
+      setButtonLabel(CONFIG_I18N.en.save, strings.save);
+    }
   });
 };
