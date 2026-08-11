@@ -238,19 +238,24 @@ Pebble.addEventListener('webviewclosed', function(e) {
     return; // user cancelled without saving
   }
 
-  var settings = clay.getSettings(e.response); // keyed by numeric messageKey
-  var hex   = settings[messageKeys.accent_color] || '#F0A30A';
-  var theme = settings[messageKeys.theme_select]; // 'dark' or 'light'
-  var rgb   = hexToRGB(hex);
+  var settings  = clay.getSettings(e.response); // keyed by numeric messageKey
+  var hex       = settings[messageKeys.accent_color] || '#F0A30A';
+  var theme     = settings[messageKeys.theme_select];       // 'dark' or 'light'
+  var tempUnit  = settings[messageKeys.temp_unit_select];   // 'C' or 'F'
+  var dateOrder = settings[messageKeys.date_order_select];  // 'DMY' or 'MDY'
+  var rgb       = hexToRGB(hex);
 
   var msg = {};
   msg[messageKeys.ACCENT_R] = rgb.r;
   msg[messageKeys.ACCENT_G] = rgb.g;
   msg[messageKeys.ACCENT_B] = rgb.b;
-  msg[messageKeys.THEME]    = (theme === 'light') ? 1 : 0;
+  msg[messageKeys.THEME]      = (theme === 'light') ? 1 : 0;
+  msg[messageKeys.TEMP_UNIT]  = (tempUnit === 'F') ? 1 : 0;
+  msg[messageKeys.DATE_ORDER] = (dateOrder === 'MDY') ? 1 : 0;
 
   Pebble.sendAppMessage(msg, function() {
-    console.log('Settings sent: accent=' + hex + ' theme=' + theme);
+    console.log('Settings sent: accent=' + hex + ' theme=' + theme +
+                ' tempUnit=' + tempUnit + ' dateOrder=' + dateOrder);
   }, function(err) {
     console.log('Settings send failed: ' + JSON.stringify(err));
   });

@@ -47,6 +47,8 @@
 #define KEY_TEMP_LOW     MESSAGE_KEY_TEMP_LOW
 #define KEY_TEMP_CURRENT MESSAGE_KEY_TEMP_CURRENT
 #define KEY_THEME        MESSAGE_KEY_THEME
+#define KEY_TEMP_UNIT    MESSAGE_KEY_TEMP_UNIT  // 0 = Celsius, 1 = Fahrenheit
+#define KEY_DATE_ORDER   MESSAGE_KEY_DATE_ORDER // 0 = DD/MM, 1 = MM/DD
 #define KEY_LOCATION      MESSAGE_KEY_LOCATION   // city name, string
 #define KEY_PHONE_BATTERY MESSAGE_KEY_PHONE_BATTERY   // 0-100, or absent until phone sends one
 #define KEY_PHONE_CHARGING MESSAGE_KEY_PHONE_CHARGING // 0/1
@@ -58,6 +60,8 @@
 #define PERSIST_ACCENT_G   101
 #define PERSIST_ACCENT_B   102
 #define PERSIST_THEME      103
+#define PERSIST_TEMP_UNIT  104
+#define PERSIST_DATE_ORDER 105
 
 // ─── Flip animation ──────────────────────────────────────────────────────────
 #define FLIP_DURATION_MS   350   // half-flip (fold down)
@@ -91,6 +95,8 @@ static uint8_t s_accent_r = 240, s_accent_g = 163, s_accent_b = 10; // Amber def
 // channel (0/85/170/255), so white text on a bright accent tile can read
 // poorly — the light theme exists as an escape hatch for bright accents.
 static bool s_theme_light = false;
+static bool s_temp_unit_fahrenheit = false; // false = Celsius (default)
+static bool s_date_order_mdy = false; // false = DD/MM (default), true = MM/DD
 
 // Data (weather/AQI arrive via AppMessage from the phone)
 static int  s_aqi       = 0;
@@ -143,6 +149,50 @@ static const char *WEATHER_ICONS[] = {
   "l",  // 11: thunderstorm
   "m",  // 12: thunderstorm + hail
 };
+
+// ─── Date tile localization ──────────────────────────────────────────────────
+// i18n_get_system_locale() reads the WATCH's own locale setting directly —
+// no phone round-trip needed. Only Western-charset languages are
+// supported, and only with unaccented abbreviations (e.g. Spanish "MIE"
+// not "MIÉ") — our baked fonts only include plain ASCII A-Z, and adding
+// accented glyphs would mean re-baking every font resource. Anything
+// outside this list (or an accented form we deliberately don't use)
+// falls back to English.
+typedef struct {
+  const char *lang_prefix;         // matched against the start of the locale string
+  const char *weekdays[7];         // indexed by tm_wday: Sun..Sat
+} LocaleWeekdays;
+
+static const LocaleWeekdays WEEKDAY_TABLE[] = {
+  { "en", { "SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT" } },
+  { "fr", { "DIM", "LUN", "MAR", "MER", "JEU", "VEN", "SAM" } },
+  { "de", { "SO",  "MO",  "DI",  "MI",  "DO",  "FR",  "SA"  } },
+  { "es", { "DOM", "LUN", "MAR", "MIE", "JUE", "VIE", "SAB" } },
+  { "it", { "DOM", "LUN", "MAR", "MER", "GIO", "VEN", "SAB" } },
+  { "nl", { "ZO",  "MA",  "DI",  "WO",  "DO",  "VR",  "ZA"  } },
+  { "pt", { "DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SAB" } },
+};
+#define WEEKDAY_TABLE_COUNT (sizeof(WEEKDAY_TABLE) / sizeof(WEEKDAY_TABLE[0]))
+
+// Returns the weekday label array to use, based on the watch's own
+// locale. Date order (DD/MM vs MM/DD) is NOT inferred from locale here —
+// that was tried initially using US-English detection, but the Pebble
+// app's language picker only offers one generic "English" option with no
+// region distinction, so it reports an en_US-style locale even for
+// non-US English speakers. Date order is a separate, explicit user
+// setting instead (KEY_DATE_ORDER) — see draw_tile_content's TILE_DATE
+// case.
+static const char *const *locale_weekdays(void) {
+  const char *locale = i18n_get_system_locale(); // e.g. "en_US", "nl_NL"
+
+  for (size_t i = 0; i < WEEKDAY_TABLE_COUNT; i++) {
+    size_t prefix_len = strlen(WEEKDAY_TABLE[i].lang_prefix);
+    if (strncmp(locale, WEEKDAY_TABLE[i].lang_prefix, prefix_len) == 0) {
+      return WEEKDAY_TABLE[i].weekdays;
+    }
+  }
+  return WEEKDAY_TABLE[0].weekdays; // fallback: English
+}
 
 // ─── Tile rects ──────────────────────────────────────────────────────────────
 static GRect tile_rect(TileId id) {
@@ -210,6 +260,21 @@ static GBitmap *s_icon_arrow,   *s_icon_arrow_dark;
 static GColor theme_fg(void)  { return s_theme_light ? GColorBlack : GColorWhite; }
 static GColor theme_bg(void)  { return s_theme_light ? GColorWhite : GColorBlack; }
 
+// Weather data always arrives from the phone in Celsius (that's what
+// Open-Meteo returns and what index.js sends) — conversion to the
+// person's preferred display unit happens here at draw time, so a unit
+// change doesn't require re-fetching or re-sending anything.
+static int display_temp(int celsius) {
+  if (s_temp_unit_fahrenheit) {
+    return (celsius * 9) / 5 + 32;
+  }
+  return celsius;
+}
+
+static char temp_unit_char(void) {
+  return s_temp_unit_fahrenheit ? 'F' : 'C';
+}
+
 static void draw_tile_content(GContext *ctx, TileId id, GRect r) {
   GColor fg = theme_fg();
   graphics_context_set_text_color(ctx, fg);
@@ -224,7 +289,8 @@ static void draw_tile_content(GContext *ctx, TileId id, GRect r) {
     case TILE_TIME: {
       time_t now = time(NULL);
       struct tm *t = localtime(&now);
-      if (clock_is_24h_style()) {
+      bool is_24h = clock_is_24h_style();
+      if (is_24h) {
         snprintf(buf, sizeof(buf), "%02d:%02d", t->tm_hour, t->tm_min);
       } else {
         snprintf(buf, sizeof(buf), "%d:%02d", t->tm_hour % 12 == 0 ? 12 : t->tm_hour % 12, t->tm_min);
@@ -238,17 +304,30 @@ static void draw_tile_content(GContext *ctx, TileId id, GRect r) {
       GRect tr = GRect(inner.origin.x + TIME_X_OFFSET, inner.origin.y + TIME_Y_OFFSET, inner.size.w, inner.size.h);
       graphics_draw_text(ctx, buf, s_font_time, tr,
                          GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
+
+      // AM/PM, top-right, same style/position as the other tiles' titles —
+      // only shown in 12h mode. A slight overlap with the big time digits
+      // is an accepted trade-off rather than a bug to fix.
+      if (!is_24h) {
+        GRect ampm_r = GRect(inner.origin.x, inner.origin.y, inner.size.w, 12);
+        graphics_draw_text(ctx, t->tm_hour < 12 ? "AM" : "PM", s_font_sm, ampm_r,
+                           GTextOverflowModeWordWrap, GTextAlignmentRight, NULL);
+      }
       break;
     }
 
     case TILE_DATE: {
       time_t now = time(NULL);
       struct tm *t = localtime(&now);
-      static const char *DAYS[] = {"SUN","MON","TUE","WED","THU","FRI","SAT"};
+      const char *const *days = locale_weekdays();
       GRect day_r = GRect(inner.origin.x, inner.origin.y + 6, inner.size.w, 26);
-      graphics_draw_text(ctx, DAYS[t->tm_wday], s_font_med, day_r,
+      graphics_draw_text(ctx, days[t->tm_wday], s_font_med, day_r,
                          GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
-      snprintf(buf, sizeof(buf), "%02d/%02d", t->tm_mday, t->tm_mon + 1);
+      if (s_date_order_mdy) {
+        snprintf(buf, sizeof(buf), "%02d/%02d", t->tm_mon + 1, t->tm_mday);
+      } else {
+        snprintf(buf, sizeof(buf), "%02d/%02d", t->tm_mday, t->tm_mon + 1);
+      }
       GRect dm_r = GRect(inner.origin.x, inner.origin.y + 30, inner.size.w, 24);
       graphics_draw_text(ctx, buf, s_font_med, dm_r,
                          GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
@@ -291,7 +370,7 @@ static void draw_tile_content(GContext *ctx, TileId id, GRect r) {
 
       // Top line (bold): current temperature
       // +4 shift to line up with the icon (which sits at top-3).
-      snprintf(buf, sizeof(buf), "%d\u00B0C", s_temp_current);
+      snprintf(buf, sizeof(buf), "%d\u00B0%c", display_temp(s_temp_current), temp_unit_char());
       GRect cur_r = GRect(tx, top + 4, tw, 22);
       graphics_draw_text(ctx, buf, s_font_med, cur_r,
                          GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
@@ -302,7 +381,9 @@ static void draw_tile_content(GContext *ctx, TileId id, GRect r) {
       // the available width, and word-wrap on an overflow would bleed a
       // stray character below the tile the same way the sleep tile's "m"
       // did — ellipsis truncates safely in place instead.
-      snprintf(buf, sizeof(buf), "H %d\u00B0C L %d\u00B0C", s_temp_high, s_temp_low);
+      snprintf(buf, sizeof(buf), "H %d\u00B0%c L %d\u00B0%c",
+              display_temp(s_temp_high), temp_unit_char(),
+              display_temp(s_temp_low), temp_unit_char());
       GRect hl_r = GRect(tx, top + 26, tw, inner.size.h - (top + 26 - inner.origin.y));
       graphics_draw_text(ctx, buf, s_font_sm, hl_r,
                          GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
@@ -563,6 +644,16 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
     persist_write_int(PERSIST_THEME, t->value->int32);
   }
 
+  if ((t = dict_find(iter, KEY_TEMP_UNIT))) {
+    s_temp_unit_fahrenheit = (t->value->int32 == 1);
+    persist_write_int(PERSIST_TEMP_UNIT, t->value->int32);
+  }
+
+  if ((t = dict_find(iter, KEY_DATE_ORDER))) {
+    s_date_order_mdy = (t->value->int32 == 1);
+    persist_write_int(PERSIST_DATE_ORDER, t->value->int32);
+  }
+
   if ((t = dict_find(iter, KEY_AQI)))          s_aqi        = t->value->int32;
   if ((t = dict_find(iter, KEY_WEATHER_CODE))) s_wmo_icon   = t->value->int32;
   if ((t = dict_find(iter, KEY_TEMP_HIGH)))    s_temp_high  = t->value->int32;
@@ -660,6 +751,14 @@ static void init(void) {
 
   if (persist_exists(PERSIST_THEME)) {
     s_theme_light = (persist_read_int(PERSIST_THEME) == 1);
+  }
+
+  if (persist_exists(PERSIST_TEMP_UNIT)) {
+    s_temp_unit_fahrenheit = (persist_read_int(PERSIST_TEMP_UNIT) == 1);
+  }
+
+  if (persist_exists(PERSIST_DATE_ORDER)) {
+    s_date_order_mdy = (persist_read_int(PERSIST_DATE_ORDER) == 1);
   }
 
   memset(s_tile_flipping, false, sizeof(s_tile_flipping));

@@ -56,6 +56,39 @@
     ]
   },
   {
+    "type": "section",
+    "items": [
+      {
+        "type": "heading",
+        "defaultValue": "Units"
+      },
+      {
+        "type": "radiogroup",
+        "messageKey": "temp_unit_select",
+        "label": "Temperature",
+        "defaultValue": "C",
+        "options": [
+          { "label": "Celsius (°C)", "value": "C" },
+          { "label": "Fahrenheit (°F)", "value": "F" }
+        ]
+      },
+      {
+        "type": "radiogroup",
+        "messageKey": "date_order_select",
+        "label": "Date format",
+        "defaultValue": "DMY",
+        "options": [
+          { "label": "DD/MM", "value": "DMY" },
+          { "label": "MM/DD", "value": "MDY" }
+        ]
+      }
+    ]
+  },
+  {
+    "type": "text",
+    "defaultValue": "The weekday name still follows your watch's language setting — this only controls the day/month order below it. Useful since the Pebble app's language picker doesn't distinguish English regions (e.g. UK vs US), so \"English\" alone doesn't tell us which date order you actually use."
+  },
+  {
     "type": "text",
     "defaultValue": "Steps and sleep are read directly from Pebble Health on your watch — no setup needed here. Just make sure Pebble Health is enabled in the Pebble app (Apps/Timeline tab)."
   },
