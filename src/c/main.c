@@ -413,19 +413,22 @@ static void draw_tile_content(GContext *ctx, TileId id, GRect r) {
                            inner.origin.y + 13, TILE_ICON_SIZE, TILE_ICON_SIZE);
       graphics_context_set_compositing_mode(ctx, GCompOpSet);
       graphics_draw_bitmap_in_rect(ctx, s_theme_light ? s_icon_sleep_dark : s_icon_sleep, icon_r);
-      GRect val_r = GRect(inner.origin.x, inner.origin.y + 40, inner.size.w, inner.size.h - 40);
+      // val_r borrows back the 4px right-padding (px) that's reserved
+      // everywhere else — the tile's accent fill already extends that
+      // far, so text using it doesn't actually look like it's leaving
+      // the tile. That's what makes room for "7h23m" to fit again.
+      GRect val_r = GRect(inner.origin.x, inner.origin.y + 40, inner.size.w + px, inner.size.h - 40);
       if (s_sleep_h == 0 && s_sleep_m == 0) {
         graphics_draw_text(ctx, "--", s_font_med, val_r,
                            GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
       } else {
-        // No trailing "m" — at this font size/tile width, "7h23m" was
-        // wide enough to wrap the "m" onto its own line, which (since
-        // Pebble doesn't clip text drawing to the given rect) rendered
-        // as a stray character bleeding below the tile. "7h23" fits
-        // cleanly and is unambiguous without it.
-        snprintf(buf, sizeof(buf), "%dh%02d", s_sleep_h, s_sleep_m);
+        // TrailingEllipsis kept as a safety net rather than reverting to
+        // plain WordWrap — if this is ever still a pixel or two too wide
+        // on some font/rendering edge case, it truncates cleanly in place
+        // instead of repeating the original bleed-outside-the-tile bug.
+        snprintf(buf, sizeof(buf), "%dh%02dm", s_sleep_h, s_sleep_m);
         graphics_draw_text(ctx, buf, s_font_med, val_r,
-                           GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
+                           GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
       }
       break;
     }
