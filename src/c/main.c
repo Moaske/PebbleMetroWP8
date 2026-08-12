@@ -422,11 +422,20 @@ static void draw_tile_content(GContext *ctx, TileId id, GRect r) {
         graphics_draw_text(ctx, "--", s_font_med, val_r,
                            GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
       } else {
-        // TrailingEllipsis kept as a safety net rather than reverting to
-        // plain WordWrap — if this is ever still a pixel or two too wide
-        // on some font/rendering edge case, it truncates cleanly in place
-        // instead of repeating the original bleed-outside-the-tile bug.
-        snprintf(buf, sizeof(buf), "%dh%02dm", s_sleep_h, s_sleep_m);
+        // "7h23m" and "6h47m" (single-digit hours) are 5 characters and
+        // confirmed to fit with a few px to spare. A double-digit hour
+        // like "12h34m" would be 6 — one more than what's proven to fit.
+        // Rather than lean on TrailingEllipsis to truncate that
+        // gracefully (it could cut into the minutes digits, not just
+        // drop the "m"), the "m" is dropped specifically in that case:
+        // "12h34" is 5 characters, the same width class as the
+        // single-digit form, so it's a controlled, predictable fit
+        // rather than a guess about how ellipsis truncation lands.
+        if (s_sleep_h >= 10) {
+          snprintf(buf, sizeof(buf), "%dh%02d", s_sleep_h, s_sleep_m);
+        } else {
+          snprintf(buf, sizeof(buf), "%dh%02dm", s_sleep_h, s_sleep_m);
+        }
         graphics_draw_text(ctx, buf, s_font_med, val_r,
                            GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
       }
