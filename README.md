@@ -25,4 +25,4 @@ And here's a glyph preview of all the MDI weather icons available in the weather
 
 Don't forget to SAVE after you set 😊
 
-<img src="https://github.com/Moaske/PebbleMetroWP8/blob/main/docs/metrowp8_settings.png" width="320"></img>
+<img src="https://github.com/Moaske/PebbleMetroWP8/blob/main/docs/metrowp8_settings.png" width="320"></img>&nbsp;&nbsp;&nbsp;<img src="https://github.com/Moaske/PebbleMetroWP8/blob/main/docs/metrowp8_settings2.png" width="320">
