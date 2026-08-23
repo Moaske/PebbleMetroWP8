@@ -1,35 +1,119 @@
 #include <pebble.h>
 
 // ─── Screen & tile geometry ─────────────────────────────────────────────────
-// Pebble Time 2 / Emery: 200 x 228 px. No outer padding — tiles run edge to
-// edge with a 4px gap between them, per exact division:
-//   Row 1: 132 (time) + 4 (gap) + 64 (date)             = 200
-//   Row 2: 64 (aqi)   + 4 (gap) + 132 (weather)          = 200
-//   Row 3: 64 (steps) + 4 (gap) + 64 (sleep) + 4 (gap) + 64 (battery) = 200
-#define SCREEN_W        200
-#define SCREEN_H        228
-#define TILE_GAP        4
-#define TILE_SQ         64          // square tile side
-#define TILE_DBL        132         // double tile width (64+64+4)
+// Two platforms supported: Emery (Pebble Time 2, 200x228) and Basalt
+// (Pebble Time/Time Steel, 144x168). Both are full-colour (2-bit/channel,
+// 64 colours) — Basalt is purely a resolution difference, not a colour-depth
+// one, so there's no monochrome fallback path to worry about.
+//
+// Basalt's grid uses the exact same "no outer padding, edge-to-edge tiles"
+// design as Emery, solved independently for its own width rather than a
+// blind scale of Emery's numbers:
+//   Row 1: 95 (time) + 3 (gap) + 46 (date)              = 144
+//   Row 2: 46 (aqi)  + 3 (gap) + 95 (weather)            = 144
+//   Row 3: 46 (steps)+ 3 (gap) + 46 (sleep) + 3 (gap) + 46 (battery) = 144
+//
+// Every fine-tuned pixel offset below (TIME_Y_OFFSET, weather tile margins,
+// battery gauge spacing, etc.) is a proportional scale of Emery's own
+// hand-tuned values, using the same TILE_SQ ratio (46/64 ≈ 0.72) that
+// governs the grid itself. This is a reasoned FIRST DRAFT, not something
+// verified on real Basalt hardware or even the Basalt emulator — Emery's
+// numbers only reached their current values through several rounds of
+// actual on-device visual iteration, and there's no way to guarantee
+// proportional scaling reproduces that same visual result on a different
+// screen without seeing it rendered. Expect this to need its own round of
+// tuning once actually tested.
+#if defined(PBL_PLATFORM_EMERY)
+  #define SCREEN_W        200
+  #define SCREEN_H        228
+  #define TILE_GAP        4
+  #define TILE_SQ         64
+  #define TILE_DBL        132
+  #define TILE_ICON_SIZE  25   // steps / sleep / aqi
+  #define ARROW_ICON_SIZE 28
+  #define TILE_PAD_X      4
+  #define TILE_PAD_Y      3
+
+  #define TIME_Y_OFFSET   (-5)
+  #define TIME_X_OFFSET   2
+  #define LABEL_H         12
+  #define ICON_Y_OFFSET   13
+  #define VALUE_Y_OFFSET  40
+
+  #define WEATHER_LEFT_MARGIN    6
+  #define WEATHER_TOP_OFFSET     14
+  #define WEATHER_ICON_Y_SUB     3    // icon sits at (top - this)
+  #define WEATHER_ICON_W         36
+  #define WEATHER_ICON_H         38
+  #define WEATHER_TX_OFFSET      40   // icon-to-text gap (from left_margin)
+  #define WEATHER_CUR_Y_OFFSET   4    // relative to `top`
+  #define WEATHER_CUR_H          22
+  #define WEATHER_HL_Y_OFFSET    26   // relative to `top`
+
+  #define DATE_DAY_Y_OFFSET   6
+  #define DATE_DAY_H          26
+  #define DATE_DM_Y_OFFSET    30
+  #define DATE_DM_H           24
+
+  #define BATT_TEXT_Y_OFFSET  18
+  #define BATT_TEXT_H         10
+  #define BATT_BAR_H          5
+  #define BATT_GAP_TEXT_BAR   4   // gap between a label and the bar below it
+  #define BATT_GAP_BAR_TEXT   2   // gap between a bar and the next label
+  #define BATT_ICON_COL_W     14
+
+#elif defined(PBL_PLATFORM_BASALT)
+  #define SCREEN_W        144
+  #define SCREEN_H        168
+  #define TILE_GAP        3
+  #define TILE_SQ         46
+  #define TILE_DBL        95
+  #define TILE_ICON_SIZE  18
+  #define ARROW_ICON_SIZE 20
+  #define TILE_PAD_X      3
+  #define TILE_PAD_Y      2
+
+  #define TIME_Y_OFFSET   (-4)
+  #define TIME_X_OFFSET   1
+  #define LABEL_H         9
+  #define ICON_Y_OFFSET   9
+  #define VALUE_Y_OFFSET  29
+
+  #define WEATHER_LEFT_MARGIN    4
+  #define WEATHER_TOP_OFFSET     10
+  #define WEATHER_ICON_Y_SUB     2
+  #define WEATHER_ICON_W         26
+  #define WEATHER_ICON_H         27
+  #define WEATHER_TX_OFFSET      29
+  #define WEATHER_CUR_Y_OFFSET   3
+  #define WEATHER_CUR_H          16
+  #define WEATHER_HL_Y_OFFSET    19
+
+  #define DATE_DAY_Y_OFFSET   4
+  #define DATE_DAY_H          19
+  #define DATE_DM_Y_OFFSET    22
+  #define DATE_DM_H           17
+
+  #define BATT_TEXT_Y_OFFSET  13
+  #define BATT_TEXT_H         7
+  #define BATT_BAR_H          4
+  #define BATT_GAP_TEXT_BAR   3
+  #define BATT_GAP_BAR_TEXT   1
+  #define BATT_ICON_COL_W     10
+#endif
 
 #define ROW1_Y          0
-#define ROW2_Y          (ROW1_Y + TILE_SQ + TILE_GAP)   // 68
-#define ROW3_Y          (ROW2_Y + TILE_SQ + TILE_GAP)   // 136
-#define ROWS_BOTTOM     (ROW3_Y + TILE_SQ)               // 200
+#define ROW2_Y          (ROW1_Y + TILE_SQ + TILE_GAP)
+#define ROW3_Y          (ROW2_Y + TILE_SQ + TILE_GAP)
+#define ROWS_BOTTOM     (ROW3_Y + TILE_SQ)
 
 #define COL1_X          0
-#define COL2_X          (COL1_X + TILE_SQ + TILE_GAP)   // 68
-#define COL3_X          (COL2_X + TILE_SQ + TILE_GAP)   // 136
+#define COL2_X          (COL1_X + TILE_SQ + TILE_GAP)
+#define COL3_X          (COL2_X + TILE_SQ + TILE_GAP)
 
-// Nav arrow: hand-drawn (circle + chevron), sized to fit the leftover
-// band below the tile grid (SCREEN_H - ROWS_BOTTOM = 28px tall).
-// Nav arrow icon size — matches the ARROW_RIGHT / ARROW_RIGHT_DARK asset.
-#define ARROW_ICON_SIZE 28
-#define ARROW_CENTER_X  (SCREEN_W - 4 - ARROW_ICON_SIZE / 2)   // 172
+// Nav arrow: bitmap, centred in whatever band is left below the tile grid.
+#define ARROW_CENTER_X  (SCREEN_W - 4 - ARROW_ICON_SIZE / 2)
 #define ARROW_CENTER_Y  (ROWS_BOTTOM + (SCREEN_H - ROWS_BOTTOM) / 2)
-
-// Tile icon sizes
-#define TILE_ICON_SIZE     25   // steps / sleep / aqi
 
 // ─── AppMessage keys ──────────────────────────────────────────────────────────
 // IMPORTANT: package.json's array-style "messageKeys" get their actual
@@ -251,7 +335,11 @@ static GFont s_font_icons_mini; // battery tile watch/phone icons (MDI subset)
 // theme). Pebble's color compositing has no software color-invert for
 // color displays (GCompOpAssignInverted is monochrome-only), so recoloring
 // at draw time isn't possible — we keep both baked assets and just pick
-// the right one per theme.
+// the right one per theme. Basalt uses separate, genuinely resized (not
+// just redrawn-smaller) bitmap assets — graphics_draw_bitmap_in_rect does
+// NOT scale a bitmap to fit a different-sized rect, it clips or tiles it,
+// so reusing the Emery-sized PNGs at a smaller draw size would have
+// cropped them rather than shrunk them.
 static GBitmap *s_icon_steps,   *s_icon_steps_dark;
 static GBitmap *s_icon_sleep,   *s_icon_sleep_dark;
 static GBitmap *s_icon_aqi,     *s_icon_aqi_dark;
@@ -279,7 +367,7 @@ static void draw_tile_content(GContext *ctx, TileId id, GRect r) {
   GColor fg = theme_fg();
   graphics_context_set_text_color(ctx, fg);
 
-  int px = 4, py = 3;
+  int px = TILE_PAD_X, py = TILE_PAD_Y;
   GRect inner = GRect(r.origin.x + px, r.origin.y + py,
                       r.size.w - px*2, r.size.h - py*2);
 
@@ -295,12 +383,6 @@ static void draw_tile_content(GContext *ctx, TileId id, GRect r) {
       } else {
         snprintf(buf, sizeof(buf), "%d:%02d", t->tm_hour % 12 == 0 ? 12 : t->tm_hour % 12, t->tm_min);
       }
-      // -16 overshot all the way to the top-aligned, so splitting the
-      // difference back toward centre. +2px horizontal nudge added too.
-      // Confirmed against the actual repo: settled at -5 after a further
-      // manual nudge beyond the -8 this comment used to say.
-      const int TIME_Y_OFFSET = -5;
-      const int TIME_X_OFFSET = 2;
       GRect tr = GRect(inner.origin.x + TIME_X_OFFSET, inner.origin.y + TIME_Y_OFFSET, inner.size.w, inner.size.h);
       graphics_draw_text(ctx, buf, s_font_time, tr,
                          GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
@@ -309,7 +391,7 @@ static void draw_tile_content(GContext *ctx, TileId id, GRect r) {
       // only shown in 12h mode. A slight overlap with the big time digits
       // is an accepted trade-off rather than a bug to fix.
       if (!is_24h) {
-        GRect ampm_r = GRect(inner.origin.x, inner.origin.y, inner.size.w, 12);
+        GRect ampm_r = GRect(inner.origin.x, inner.origin.y, inner.size.w, LABEL_H);
         graphics_draw_text(ctx, t->tm_hour < 12 ? "AM" : "PM", s_font_sm, ampm_r,
                            GTextOverflowModeWordWrap, GTextAlignmentRight, NULL);
       }
@@ -320,7 +402,7 @@ static void draw_tile_content(GContext *ctx, TileId id, GRect r) {
       time_t now = time(NULL);
       struct tm *t = localtime(&now);
       const char *const *days = locale_weekdays();
-      GRect day_r = GRect(inner.origin.x, inner.origin.y + 6, inner.size.w, 26);
+      GRect day_r = GRect(inner.origin.x, inner.origin.y + DATE_DAY_Y_OFFSET, inner.size.w, DATE_DAY_H);
       graphics_draw_text(ctx, days[t->tm_wday], s_font_med, day_r,
                          GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
       if (s_date_order_mdy) {
@@ -328,22 +410,22 @@ static void draw_tile_content(GContext *ctx, TileId id, GRect r) {
       } else {
         snprintf(buf, sizeof(buf), "%02d/%02d", t->tm_mday, t->tm_mon + 1);
       }
-      GRect dm_r = GRect(inner.origin.x, inner.origin.y + 30, inner.size.w, 24);
+      GRect dm_r = GRect(inner.origin.x, inner.origin.y + DATE_DM_Y_OFFSET, inner.size.w, DATE_DM_H);
       graphics_draw_text(ctx, buf, s_font_med, dm_r,
                          GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
       break;
     }
 
     case TILE_AQI: {
-      GRect lbl_r = GRect(inner.origin.x, inner.origin.y, inner.size.w, 12);
+      GRect lbl_r = GRect(inner.origin.x, inner.origin.y, inner.size.w, LABEL_H);
       graphics_draw_text(ctx, "AQI", s_font_sm, lbl_r,
                          GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
       GRect icon_r = GRect(inner.origin.x + (inner.size.w - TILE_ICON_SIZE) / 2,
-                           inner.origin.y + 13, TILE_ICON_SIZE, TILE_ICON_SIZE);
+                           inner.origin.y + ICON_Y_OFFSET, TILE_ICON_SIZE, TILE_ICON_SIZE);
       graphics_context_set_compositing_mode(ctx, GCompOpSet);
       graphics_draw_bitmap_in_rect(ctx, s_theme_light ? s_icon_aqi_dark : s_icon_aqi, icon_r);
       snprintf(buf, sizeof(buf), "%d", s_aqi);
-      GRect val_r = GRect(inner.origin.x, inner.origin.y + 40, inner.size.w, inner.size.h - 40);
+      GRect val_r = GRect(inner.origin.x, inner.origin.y + VALUE_Y_OFFSET, inner.size.w, inner.size.h - VALUE_Y_OFFSET);
       graphics_draw_text(ctx, buf, s_font_med, val_r,
                          GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
       break;
@@ -352,26 +434,25 @@ static void draw_tile_content(GContext *ctx, TileId id, GRect r) {
     case TILE_WEATHER: {
       // Location name, top-left, same style/position as the other tiles'
       // titles (AQI / STEPS / SLEEP / BATT).
-      GRect loc_r = GRect(inner.origin.x, inner.origin.y, inner.size.w, 12);
+      GRect loc_r = GRect(inner.origin.x, inner.origin.y, inner.size.w, LABEL_H);
       graphics_draw_text(ctx, s_location, s_font_sm, loc_r,
                          GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
 
       // Small left margin shifts icon+text as a group toward the tile's
       // centre, since the icon glyph's own left-side bearing made the
       // whole block look off-centre hugging the left edge before.
-      int left_margin = 6;
-      int top = inner.origin.y + 14; // pushed down to make room for the label above
-      GRect icon_r = GRect(inner.origin.x + left_margin, top - 3, 36, 38);
+      int left_margin = WEATHER_LEFT_MARGIN;
+      int top = inner.origin.y + WEATHER_TOP_OFFSET; // pushed down to make room for the label above
+      GRect icon_r = GRect(inner.origin.x + left_margin, top - WEATHER_ICON_Y_SUB, WEATHER_ICON_W, WEATHER_ICON_H);
       graphics_draw_text(ctx, WEATHER_ICONS[s_wmo_icon < 13 ? s_wmo_icon : 0], s_font_weather, icon_r,
                          GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
 
-      int tx = inner.origin.x + left_margin + 40;
-      int tw = inner.size.w - left_margin - 40;
+      int tx = inner.origin.x + left_margin + WEATHER_TX_OFFSET;
+      int tw = inner.size.w - left_margin - WEATHER_TX_OFFSET;
 
       // Top line (bold): current temperature
-      // +4 shift to line up with the icon (which sits at top-3).
       snprintf(buf, sizeof(buf), "%d\u00B0%c", display_temp(s_temp_current), temp_unit_char());
-      GRect cur_r = GRect(tx, top + 4, tw, 22);
+      GRect cur_r = GRect(tx, top + WEATHER_CUR_Y_OFFSET, tw, WEATHER_CUR_H);
       graphics_draw_text(ctx, buf, s_font_med, cur_r,
                          GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
 
@@ -384,47 +465,49 @@ static void draw_tile_content(GContext *ctx, TileId id, GRect r) {
       snprintf(buf, sizeof(buf), "H %d\u00B0%c L %d\u00B0%c",
               display_temp(s_temp_high), temp_unit_char(),
               display_temp(s_temp_low), temp_unit_char());
-      GRect hl_r = GRect(tx, top + 26, tw, inner.size.h - (top + 26 - inner.origin.y));
+      GRect hl_r = GRect(tx, top + WEATHER_HL_Y_OFFSET, tw, inner.size.h - (top + WEATHER_HL_Y_OFFSET - inner.origin.y));
       graphics_draw_text(ctx, buf, s_font_sm, hl_r,
                          GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
       break;
     }
 
     case TILE_STEPS: {
-      GRect lbl_r = GRect(inner.origin.x, inner.origin.y, inner.size.w, 12);
+      GRect lbl_r = GRect(inner.origin.x, inner.origin.y, inner.size.w, LABEL_H);
       graphics_draw_text(ctx, "STEPS", s_font_sm, lbl_r,
                          GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
       GRect icon_r = GRect(inner.origin.x + (inner.size.w - TILE_ICON_SIZE) / 2,
-                           inner.origin.y + 13, TILE_ICON_SIZE, TILE_ICON_SIZE);
+                           inner.origin.y + ICON_Y_OFFSET, TILE_ICON_SIZE, TILE_ICON_SIZE);
       graphics_context_set_compositing_mode(ctx, GCompOpSet);
       graphics_draw_bitmap_in_rect(ctx, s_theme_light ? s_icon_steps_dark : s_icon_steps, icon_r);
       snprintf(buf, sizeof(buf), "%d", s_steps);
-      GRect val_r = GRect(inner.origin.x, inner.origin.y + 40, inner.size.w, inner.size.h - 40);
+      GRect val_r = GRect(inner.origin.x, inner.origin.y + VALUE_Y_OFFSET, inner.size.w, inner.size.h - VALUE_Y_OFFSET);
       graphics_draw_text(ctx, buf, s_font_med, val_r,
                          GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
       break;
     }
 
     case TILE_SLEEP: {
-      GRect lbl_r = GRect(inner.origin.x, inner.origin.y, inner.size.w, 12);
+      GRect lbl_r = GRect(inner.origin.x, inner.origin.y, inner.size.w, LABEL_H);
       graphics_draw_text(ctx, "SLEEP", s_font_sm, lbl_r,
                          GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
       GRect icon_r = GRect(inner.origin.x + (inner.size.w - TILE_ICON_SIZE) / 2,
-                           inner.origin.y + 13, TILE_ICON_SIZE, TILE_ICON_SIZE);
+                           inner.origin.y + ICON_Y_OFFSET, TILE_ICON_SIZE, TILE_ICON_SIZE);
       graphics_context_set_compositing_mode(ctx, GCompOpSet);
       graphics_draw_bitmap_in_rect(ctx, s_theme_light ? s_icon_sleep_dark : s_icon_sleep, icon_r);
-      // val_r borrows back the 4px right-padding (px) that's reserved
+      // val_r borrows back the right-padding (px) that's reserved
       // everywhere else — the tile's accent fill already extends that
       // far, so text using it doesn't actually look like it's leaving
-      // the tile. That's what makes room for "7h23m" to fit again.
-      GRect val_r = GRect(inner.origin.x, inner.origin.y + 40, inner.size.w + px, inner.size.h - 40);
+      // the tile. That's what makes room for "7h23m" to fit on Emery;
+      // on Basalt's much smaller tile it's more likely to matter even
+      // more, or may still need the same digit-count fallback below.
+      GRect val_r = GRect(inner.origin.x, inner.origin.y + VALUE_Y_OFFSET, inner.size.w + px, inner.size.h - VALUE_Y_OFFSET);
       if (s_sleep_h == 0 && s_sleep_m == 0) {
         graphics_draw_text(ctx, "--", s_font_med, val_r,
                            GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
       } else {
-        // "7h23m" and "6h47m" (single-digit hours) are 5 characters and
-        // confirmed to fit with a few px to spare. A double-digit hour
-        // like "12h34m" would be 6 — one more than what's proven to fit.
+        // "7h23m" (single-digit hours) is 5 characters and confirmed to
+        // fit on Emery with a few px to spare. A double-digit hour like
+        // "12h34m" would be 6 — one more than what's proven to fit.
         // Rather than lean on TrailingEllipsis to truncate that
         // gracefully (it could cut into the minutes digits, not just
         // drop the "m"), the "m" is dropped specifically in that case:
@@ -445,36 +528,26 @@ static void draw_tile_content(GContext *ctx, TileId id, GRect r) {
     case TILE_BATTERY: {
       BatteryChargeState bat = battery_state_service_peek();
       int watch_pct = bat.charge_percent;
-      GRect lbl_r = GRect(inner.origin.x, inner.origin.y, inner.size.w, 12);
+      GRect lbl_r = GRect(inner.origin.x, inner.origin.y, inner.size.w, LABEL_H);
       graphics_draw_text(ctx, "BATT", s_font_sm, lbl_r,
                          GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
 
       // Two compact gauges below the title: watch on top, phone below.
-      // Text reverts to the small title font (s_font_sm) rather than the
-      // bigger value font — that's what actually makes room for two full
-      // rows in a 64px tile — and bars are thinner (5px vs the old
-      // single-gauge 7px) for the same reason.
-      int text_h = 10;
-      int bar_h  = 5;
+      int text_h = BATT_TEXT_H;
+      int bar_h  = BATT_BAR_H;
       int bar_w  = inner.size.w;
 
-      // Text-to-bar gap pushed to 4px — 2px wasn't visibly different from
-      // the original 1px (same font-metric issue as the time tile: the
-      // text's own box has more baked-in headroom than its visible ink,
-      // so a small numeric change doesn't always read as a visible one).
-      // This uses the full remaining slack, landing the bottom bar flush
-      // with the tile's inner edge rather than leaving more unused margin.
-      int watch_text_y = inner.origin.y + 18;
-      int watch_bar_y  = watch_text_y + text_h + 4;
-      int phone_text_y = watch_bar_y + bar_h + 2;
-      int phone_bar_y  = phone_text_y + text_h + 4;
+      int watch_text_y = inner.origin.y + BATT_TEXT_Y_OFFSET;
+      int watch_bar_y  = watch_text_y + text_h + BATT_GAP_TEXT_BAR;
+      int phone_text_y = watch_bar_y + bar_h + BATT_GAP_BAR_TEXT;
+      int phone_bar_y  = phone_text_y + text_h + BATT_GAP_TEXT_BAR;
 
       GColor track_col = s_theme_light ? GColorFromRGB(200,200,200) : GColorFromRGB(90, 90, 90);
 
       // Icon glyphs sit at the left of each label row, percentage text
       // starts right after. icon_col_w reserves the space for the glyph
       // plus a small gap before the text.
-      int icon_col_w = 14;
+      int icon_col_w = BATT_ICON_COL_W;
 
       // Watch gauge
       GRect w_icon_r = GRect(inner.origin.x, watch_text_y - 1, icon_col_w, text_h + 2);
@@ -712,6 +785,7 @@ static void window_load(Window *window) {
   Layer *root = window_get_root_layer(window);
   GRect bounds = layer_get_bounds(root);
 
+#if defined(PBL_PLATFORM_EMERY)
   s_font_time    = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_TIME_52));
   s_font_med     = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_BOLD_18));
   s_font_sm      = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_REGULAR_12));
@@ -726,6 +800,22 @@ static void window_load(Window *window) {
   s_icon_aqi_dark     = gbitmap_create_with_resource(RESOURCE_ID_AQI_DARK);
   s_icon_arrow        = gbitmap_create_with_resource(RESOURCE_ID_ARROW_RIGHT);
   s_icon_arrow_dark   = gbitmap_create_with_resource(RESOURCE_ID_ARROW_RIGHT_DARK);
+#elif defined(PBL_PLATFORM_BASALT)
+  s_font_time    = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_TIME_38));
+  s_font_med     = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_BOLD_13));
+  s_font_sm      = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_REGULAR_9));
+  s_font_weather = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_WEATHER_26));
+  s_font_icons_mini = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ICONS_MINI_10));
+
+  s_icon_steps        = gbitmap_create_with_resource(RESOURCE_ID_STEPS_BASALT);
+  s_icon_steps_dark   = gbitmap_create_with_resource(RESOURCE_ID_STEPS_DARK_BASALT);
+  s_icon_sleep        = gbitmap_create_with_resource(RESOURCE_ID_SLEEP_BASALT);
+  s_icon_sleep_dark   = gbitmap_create_with_resource(RESOURCE_ID_SLEEP_DARK_BASALT);
+  s_icon_aqi          = gbitmap_create_with_resource(RESOURCE_ID_AQI_BASALT);
+  s_icon_aqi_dark     = gbitmap_create_with_resource(RESOURCE_ID_AQI_DARK_BASALT);
+  s_icon_arrow        = gbitmap_create_with_resource(RESOURCE_ID_ARROW_RIGHT_BASALT);
+  s_icon_arrow_dark   = gbitmap_create_with_resource(RESOURCE_ID_ARROW_RIGHT_DARK_BASALT);
+#endif
 
   s_canvas_layer = layer_create(bounds);
   layer_set_update_proc(s_canvas_layer, canvas_update_proc);

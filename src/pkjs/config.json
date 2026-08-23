@@ -86,7 +86,7 @@
   },
   {
     "type": "text",
-    "defaultValue": "The weekday name still follows your watch's language setting — this only controls the day/month order below it. Useful since the Pebble app's language picker doesn't distinguish English regions (e.g. UK vs US), so \"English\" alone doesn't tell us which date order you actually use."
+    "defaultValue": "The weekday name still follows your watch's language setting — this only controls the day/month order below it. Useful since the Pebble app's language picker doesn't distinguish English regions (e.g. UK vs US)."
   },
   {
     "type": "text",
