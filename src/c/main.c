@@ -37,7 +37,7 @@
   #define TIME_Y_OFFSET   (-5)
   #define TIME_X_OFFSET   2
   #define LABEL_H         12
-  #define ICON_Y_OFFSET   13
+  #define ICON_Y_OFFSET   17
   #define VALUE_Y_OFFSET  40
 
   #define WEATHER_LEFT_MARGIN    6
@@ -76,7 +76,7 @@
   #define TIME_Y_OFFSET   (-4)
   #define TIME_X_OFFSET   1
   #define LABEL_H         9
-  #define ICON_Y_OFFSET   9
+  #define ICON_Y_OFFSET   12
   #define VALUE_Y_OFFSET  29
 
   #define WEATHER_LEFT_MARGIN    4
