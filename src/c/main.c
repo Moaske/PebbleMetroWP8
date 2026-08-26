@@ -39,6 +39,7 @@
   #define LABEL_H         12
   #define ICON_Y_OFFSET   17
   #define VALUE_Y_OFFSET  40
+  #define AQI_VAL_Y_NUDGE 5   // compensates for s_font_sm sitting high in the (s_font_med-sized) value box
 
   #define WEATHER_LEFT_MARGIN    6
   #define WEATHER_TOP_OFFSET     14
@@ -78,6 +79,7 @@
   #define LABEL_H         9
   #define ICON_Y_OFFSET   12
   #define VALUE_Y_OFFSET  29
+  #define AQI_VAL_Y_NUDGE 3   // compensates for s_font_sm sitting high in the (s_font_med-sized) value box
 
   #define WEATHER_LEFT_MARGIN    4
   #define WEATHER_TOP_OFFSET     10
@@ -158,7 +160,7 @@
 #define PERSIST_LOCATION     111
 
 // ─── Flip animation ──────────────────────────────────────────────────────────
-#define FLIP_DURATION_MS   200   // half-flip (fold down) ~70% faster
+#define FLIP_DURATION_MS   200   // half-flip (fold down) — settled here in v1.4.3 after visual tuning
 #define FLIP_DELAY_MS      1000  // second tile starts 1 s after first
 
 // ─── Wake detection ───────────────────────────────────────────────────────────
@@ -373,6 +375,19 @@ static char temp_unit_char(void) {
   return s_temp_unit_fahrenheit ? 'F' : 'C';
 }
 
+// European AQI classification, matching Open-Meteo's own documented bands
+// exactly (the "european_aqi" field is what index.js fetches and sends):
+// 0-20 Good, 20-40 Fair, 40-60 Moderate, 60-80 Poor, 80-100 Very Poor,
+// >100 Extremely Poor. https://open-meteo.com/en/docs/air-quality-api
+static const char *aqi_classification(int aqi) {
+  if (aqi < 20)  return "Good";
+  if (aqi < 40)  return "Fair";
+  if (aqi < 60)  return "Moderate";
+  if (aqi < 80)  return "Poor";
+  if (aqi < 100) return "Very Poor";
+  return "Xtr Poor";
+}
+
 static void draw_tile_content(GContext *ctx, TileId id, GRect r) {
   GColor fg = theme_fg();
   graphics_context_set_text_color(ctx, fg);
@@ -434,10 +449,22 @@ static void draw_tile_content(GContext *ctx, TileId id, GRect r) {
                            inner.origin.y + ICON_Y_OFFSET, TILE_ICON_SIZE, TILE_ICON_SIZE);
       graphics_context_set_compositing_mode(ctx, GCompOpSet);
       graphics_draw_bitmap_in_rect(ctx, s_theme_light ? s_icon_aqi_dark : s_icon_aqi, icon_r);
-      snprintf(buf, sizeof(buf), "%d", s_aqi);
-      GRect val_r = GRect(inner.origin.x, inner.origin.y + VALUE_Y_OFFSET, inner.size.w, inner.size.h - VALUE_Y_OFFSET);
-      graphics_draw_text(ctx, buf, s_font_med, val_r,
-                         GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
+      // Classification word instead of the raw number — most people don't
+      // have an intuitive sense of what "42" means on the European AQI
+      // scale, but "Good"/"Moderate"/"Poor" needs no lookup. s_font_sm
+      // (not the bigger s_font_med the raw number used, and not the new
+      // s_font_reg_lg tried in between) fits the most characters before
+      // truncating. Box height here was originally sized for the bigger
+      // font's box, and Pebble draws text top-aligned within its box —
+      // with a genuinely smaller font left in that same tall box, the
+      // text sat visibly too high, looking misaligned against the icon
+      // above it. AQI_VAL_Y_NUDGE compensates by shifting just this
+      // text down, without touching the shared VALUE_Y_OFFSET that
+      // Steps/Sleep still rely on for their (still s_font_med-sized)
+      // values.
+      GRect val_r = GRect(inner.origin.x, inner.origin.y + VALUE_Y_OFFSET + AQI_VAL_Y_NUDGE, inner.size.w, inner.size.h - VALUE_Y_OFFSET - AQI_VAL_Y_NUDGE);
+      graphics_draw_text(ctx, aqi_classification(s_aqi), s_font_sm, val_r,
+                         GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
       break;
     }
 
