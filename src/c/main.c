@@ -158,7 +158,7 @@
 #define PERSIST_LOCATION     111
 
 // ─── Flip animation ──────────────────────────────────────────────────────────
-#define FLIP_DURATION_MS   350   // half-flip (fold down)
+#define FLIP_DURATION_MS   200   // half-flip (fold down) ~70% faster
 #define FLIP_DELAY_MS      1000  // second tile starts 1 s after first
 
 // ─── Wake detection ───────────────────────────────────────────────────────────
