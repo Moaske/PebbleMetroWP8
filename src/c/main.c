@@ -146,6 +146,16 @@
 #define PERSIST_THEME      103
 #define PERSIST_TEMP_UNIT  104
 #define PERSIST_DATE_ORDER 105
+// Weather/AQI/location caching: these persist so the very first draw after
+// a watchface restart (e.g. navigating to the menu and back can evict the
+// process) shows the last known values immediately instead of blank/zero
+// while waiting on a fresh AppMessage round-trip from the phone.
+#define PERSIST_AQI          106
+#define PERSIST_WMO_ICON     107
+#define PERSIST_TEMP_HIGH    108
+#define PERSIST_TEMP_LOW     109
+#define PERSIST_TEMP_CURRENT 110
+#define PERSIST_LOCATION     111
 
 // ─── Flip animation ──────────────────────────────────────────────────────────
 #define FLIP_DURATION_MS   350   // half-flip (fold down)
@@ -739,15 +749,31 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
     persist_write_int(PERSIST_DATE_ORDER, t->value->int32);
   }
 
-  if ((t = dict_find(iter, KEY_AQI)))          s_aqi        = t->value->int32;
-  if ((t = dict_find(iter, KEY_WEATHER_CODE))) s_wmo_icon   = t->value->int32;
-  if ((t = dict_find(iter, KEY_TEMP_HIGH)))    s_temp_high  = t->value->int32;
-  if ((t = dict_find(iter, KEY_TEMP_LOW)))     s_temp_low   = t->value->int32;
-  if ((t = dict_find(iter, KEY_TEMP_CURRENT))) s_temp_current = t->value->int32;
+  if ((t = dict_find(iter, KEY_AQI))) {
+    s_aqi = t->value->int32;
+    persist_write_int(PERSIST_AQI, s_aqi);
+  }
+  if ((t = dict_find(iter, KEY_WEATHER_CODE))) {
+    s_wmo_icon = t->value->int32;
+    persist_write_int(PERSIST_WMO_ICON, s_wmo_icon);
+  }
+  if ((t = dict_find(iter, KEY_TEMP_HIGH))) {
+    s_temp_high = t->value->int32;
+    persist_write_int(PERSIST_TEMP_HIGH, s_temp_high);
+  }
+  if ((t = dict_find(iter, KEY_TEMP_LOW))) {
+    s_temp_low = t->value->int32;
+    persist_write_int(PERSIST_TEMP_LOW, s_temp_low);
+  }
+  if ((t = dict_find(iter, KEY_TEMP_CURRENT))) {
+    s_temp_current = t->value->int32;
+    persist_write_int(PERSIST_TEMP_CURRENT, s_temp_current);
+  }
 
   if ((t = dict_find(iter, KEY_LOCATION))) {
     strncpy(s_location, t->value->cstring, sizeof(s_location) - 1);
     s_location[sizeof(s_location) - 1] = '\0';
+    persist_write_string(PERSIST_LOCATION, s_location);
   }
 
   if ((t = dict_find(iter, KEY_PHONE_BATTERY))) {
@@ -861,6 +887,21 @@ static void init(void) {
 
   if (persist_exists(PERSIST_DATE_ORDER)) {
     s_date_order_mdy = (persist_read_int(PERSIST_DATE_ORDER) == 1);
+  }
+
+  // Weather/AQI/location: load whatever was last received, so the very
+  // first draw shows real (if possibly stale) data instead of blank/zero
+  // while the fresh AppMessage on this launch is still in flight. That
+  // fresh data (refreshWeather() already runs on every phone-side 'ready'
+  // event) will arrive and overwrite these within moments regardless —
+  // this only fixes the instant between window_load and that arrival.
+  if (persist_exists(PERSIST_AQI))          s_aqi          = persist_read_int(PERSIST_AQI);
+  if (persist_exists(PERSIST_WMO_ICON))     s_wmo_icon     = persist_read_int(PERSIST_WMO_ICON);
+  if (persist_exists(PERSIST_TEMP_HIGH))    s_temp_high    = persist_read_int(PERSIST_TEMP_HIGH);
+  if (persist_exists(PERSIST_TEMP_LOW))     s_temp_low     = persist_read_int(PERSIST_TEMP_LOW);
+  if (persist_exists(PERSIST_TEMP_CURRENT)) s_temp_current = persist_read_int(PERSIST_TEMP_CURRENT);
+  if (persist_exists(PERSIST_LOCATION)) {
+    persist_read_string(PERSIST_LOCATION, s_location, sizeof(s_location));
   }
 
   memset(s_tile_flipping, false, sizeof(s_tile_flipping));
