@@ -14,7 +14,7 @@ Current version: 1.4.4
   <br><br>
 
 <img src="https://github.com/Moaske/PebbleMetroWP8/blob/main/docs/metrowp8_animated.gif">&nbsp;&nbsp;&nbsp;<img src="https://github.com/Moaske/PebbleMetroWP8/blob/main/docs/metrowp8_1.png"></img>&nbsp;&nbsp;&nbsp;
-<img src="https://github.com/Moaske/PebbleMetroWP8/blob/main/docs/metrowp8_2.png"></img>&nbsp;&nbsp;&nbsp;<img src="https://github.com/Moaske/PebbleMetroWP8/blob/main/docs/metrowp8_3.png"></img>&nbsp;&nbsp;&nbsp;<img src="https://github.com/Moaske/PebbleMetroWP8/blob/main/docs/metrowp8_4.png"></img>&nbsp;&nbsp;&nbsp;<img src="https://github.com/Moaske/PebbleMetroWP8/blob/main/docs/metrowp8_5.png">
+<img src="https://github.com/Moaske/PebbleMetroWP8/blob/main/docs/metrowp8_2.png"></img>&nbsp;&nbsp;&nbsp;<img src="https://github.com/Moaske/PebbleMetroWP8/blob/main/docs/metrowp8_3.png"></img>&nbsp;&nbsp;&nbsp;<img src="https://github.com/Moaske/PebbleMetroWP8/blob/main/docs/metrowp8_4.png"></img>&nbsp;&nbsp;&nbsp;<img src="https://github.com/Moaske/PebbleMetroWP8/blob/main/docs/metrowp8_5.png">&nbsp;&nbsp;&nbsp;<img src="https://github.com/Moaske/PebbleMetroWP8/blob/main/docs/basalt_1.png">&nbsp;&nbsp;&nbsp;<img src="https://github.com/Moaske/PebbleMetroWP8/blob/main/docs/basalt_2.png">
 <br><br>
 
 And here's a glyph preview of all the MDI weather icons available in the weather tile:
