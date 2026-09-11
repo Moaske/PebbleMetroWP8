@@ -670,8 +670,14 @@ static void canvas_update_proc(Layer *layer, GContext *ctx) {
 }
 
 // ─── Flip animation timers ────────────────────────────────────────────────────
+// Timer callbacks pack a small TileId into the void* context parameter.
+// intptr_t (not plain int) is the correct type for a pointer<->int
+// round-trip — on Pebble's actual 32-bit ARM targets int and void* happen
+// to be the same size so this was never a real bug, but it's not
+// guaranteed portable C, which is exactly what triggered Basalt's build
+// warning ("cast to smaller integer type from void*").
 static void flip_end_callback(void *context) {
-  TileId id = (TileId)(int)context;
+  TileId id = (TileId)(intptr_t)context;
   s_tile_flipping[id] = false;
   s_flip_phase[id] = 0;
   s_flip_timer[id] = NULL;
@@ -679,7 +685,7 @@ static void flip_end_callback(void *context) {
 }
 
 static void flip_phase1_callback(void *context) {
-  TileId id = (TileId)(int)context;
+  TileId id = (TileId)(intptr_t)context;
   s_flip_phase[id] = 2;
   layer_mark_dirty(s_canvas_layer);
   s_flip_timer[id] = app_timer_register(FLIP_DURATION_MS, flip_end_callback, context);
@@ -690,11 +696,11 @@ static void start_flip(TileId id) {
   s_tile_flipping[id] = true;
   s_flip_phase[id] = 1;
   layer_mark_dirty(s_canvas_layer);
-  s_flip_timer[id] = app_timer_register(FLIP_DURATION_MS, flip_phase1_callback, (void*)(int)id);
+  s_flip_timer[id] = app_timer_register(FLIP_DURATION_MS, flip_phase1_callback, (void*)(intptr_t)id);
 }
 
 static void second_flip_callback(void *context) {
-  TileId id = (TileId)(int)context;
+  TileId id = (TileId)(intptr_t)context;
   start_flip(id);
   s_flip_delay_timer = NULL;
 }
@@ -707,7 +713,7 @@ static void trigger_wakeup_flips(void) {
   } while (second == first);
 
   start_flip(first);
-  s_flip_delay_timer = app_timer_register(FLIP_DELAY_MS, second_flip_callback, (void*)(int)second);
+  s_flip_delay_timer = app_timer_register(FLIP_DELAY_MS, second_flip_callback, (void*)(intptr_t)second);
 }
 
 // ─── Wake detection: poll light_is_on() for a rising edge ───────────────────

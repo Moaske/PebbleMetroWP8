@@ -254,6 +254,14 @@
                     "name": "FONT_ICONS_MINI_10",
                     "targetPlatforms": null,
                     "type": "font"
+                },
+                {
+                    "file": "fonts/seguisb.ttf",
+                    "name": "FONT_SEGOEUISB_14",
+                    "targetPlatforms": [
+                        "emery"
+                    ],
+                    "type": "font"
                 }
             ]
         },
@@ -267,5 +275,5 @@
             "watchface": true
         }
     },
-    "version": "1.4.4"
+    "version": "1.4.5"
 }
