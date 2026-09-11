@@ -58,8 +58,32 @@ module.exports = function(minified) {
     }
   };
 
+  // The watchface's OWN icon font, embedded so the preview renders the exact
+  // glyphs the watch does -- no CDN dependency, no drift from the baked
+  // resource.
+  var METROICONS_B64 = "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ADIAAQAAAAAAAQALAGMAAQAAAAAAAgAHAH8AAQAAAAAAAwAnANcAAQAAAAAABAALARcAAQAAAAAABQAPAUMAAQAAAAAABgAKAWkAAwABBAkAAAAwAAAAAwABBAkAAQAWAEsAAwABBAkAAgAOAG8AAwABBAkAAwBOAIcAAwABBAkABAAWAP8AAwABBAkABQAeASMAAwABBAkABgAUAVMAQwBvAHAAeQByAGkAZwBoAHQAIAAoAGMAKQAgADIAMAAyADYALAAgAHIAbwBvAHQAAENvcHlyaWdodCAoYykgMjAyNiwgcm9vdAAATQBlAHQAcgBvACAASQBjAG8AbgBzAABNZXRybyBJY29ucwAAUgBlAGcAdQBsAGEAcgAAUmVndWxhcgAARgBvAG4AdABGAG8AcgBnAGUAIAAyAC4AMAAgADoAIABNAGUAdAByAG8AIABJAGMAbwBuAHMAIAA6ACAAMQAxAC0AOQAtADIAMAAyADYAAEZvbnRGb3JnZSAyLjAgOiBNZXRybyBJY29ucyA6IDExLTktMjAyNgAATQBlAHQAcgBvACAASQBjAG8AbgBzAABNZXRybyBJY29ucwAAVgBlAHIAcwBpAG8AbgAgADAAMAAxAC4AMAAwADAAAFZlcnNpb24gMDAxLjAwMAAATQBlAHQAcgBvAEkAYwBvAG4AcwAATWV0cm9JY29ucwAAAAACAAAAAAAA/7UAMgAAAAEAAAAAAAAAAAAAAAAAAAAAACgAAAABAAIBAgEDAQQBBQEGAQcBCAEJAQoBCwEMAQ0BDgEPARABEQESARMBFAEVARYBFwEYARkBGgEbARwBHQEeAR8BIAEhASIBIwEkASUBJgR3YWxrCWJlZC1jbG9jawphaXItZmlsdGVyBXdhdGNoBXBob25lC2hlYXJ0LXB1bHNlC2ZpcmUtY2lyY2xlDHN1bi13aXJlbGVzcwh3aW5kc29jawpuYXZpZ2F0aW9uCHVtYnJlbGxhCGNhbGVuZGFyBnNjaG9vbBphcnJvdy1yaWdodC1jaXJjbGUtb3V0bGluZQhtb29uLW5ldxRtb29uLXdheGluZy1jcmVzY2VudBJtb29uLWZpcnN0LXF1YXJ0ZXITbW9vbi13YXhpbmctZ2liYm91cwltb29uLWZ1bGwTbW9vbi13YW5pbmctZ2liYm91cxFtb29uLWxhc3QtcXVhcnRlchRtb29uLXdhbmluZy1jcmVzY2VudA13ZWF0aGVyLXN1bm55DHdlYXRoZXItaGF6eRV3ZWF0aGVyLXBhcnRseS1jbG91ZHkOd2VhdGhlci1jbG91ZHkLd2VhdGhlci1mb2cUd2VhdGhlci1wYXJ0bHktcmFpbnkNd2VhdGhlci1yYWlueQ93ZWF0aGVyLXBvdXJpbmcTd2VhdGhlci1zbm93eS1yYWlueQ13ZWF0aGVyLXNub3d5E3dlYXRoZXItc25vd3ktaGVhdnkRd2VhdGhlci1saWdodG5pbmcMd2VhdGhlci1oYWlsDXdlYXRoZXItbmlnaHQbd2VhdGhlci1uaWdodC1wYXJ0bHktY2xvdWR5AAAAAAAAAf//AAIAAAABAAAAAOIuwukAAAAA5slX6gAAAADmyVfq";
+
+  // Mirrors ContentId in main.c. The index here IS the value the Clay select
+  // sends to the watch, so the order is load-bearing.
+  var TILE_CONTENT = [
+    { t:"AQI",      dual:false, icon:"2", v:"Moderate" },
+    { t:"STEPS",    dual:false, icon:"0", v:"5362" },
+    { t:"SLEEP",    dual:false, icon:"1", v:"7h 23m" },
+    { t:"MOON",     dual:false, icon:"D", v:"Waxing Gib" },
+    { t:"RAIN",     dual:false, icon:":", v:"1hr: 20%" },
+    { t:"HRM",      dual:false, icon:"5", v:"62 bpm" },
+    { t:"CALORIES", dual:false, icon:"6", v:"1847 cal" },
+    { t:"WEEKNR",   dual:true,  l1i:";", l1v:"37", l2i:"<", l2v:"05" },
+    { t:"SUNSET",   dual:true,  l1i:"@", l1v:"07:14", l2i:"?", l2v:"20:03" }
+  ];
+
   var previewHtml =
     '<style>' +
+    '@font-face { font-family:"MetroIcons"; src:url(data:font/ttf;base64,' + METROICONS_B64 + ') format("truetype"); }' +
+    '.mtprev-configurable { outline:1px solid #e51400; outline-offset:-1px; }' +
+    '.mtprev-t2row { display:flex; align-items:center; justify-content:space-between; margin-top:2px; }' +
+    '.mtprev-t2icon { font-family:"MetroIcons"; font-size:13px; opacity:0.9; }' +
+    '.mtprev-t2val { font-family:"Segoe UI",Arial,sans-serif; font-size:15px; font-weight:600; }' +
     '.mtprev-wrap { display:flex; flex-direction:column; align-items:center; padding:14px 0 18px; }' +
     '.mtprev-shell { --acc:#f0a30a; background:#1c1c1c; border-radius:18px; border:2.5px solid #3a3a3a; padding:11px; position:relative; width:222px; box-shadow:0 6px 24px rgba(0,0,0,0.4); }' +
     '.mtprev-btn { position:absolute; background:#444; border-radius:0 3px 3px 0; }' +
@@ -86,7 +110,7 @@ module.exports = function(minified) {
     '.mtprev-lbl { font-family:"Segoe UI",Arial,sans-serif; font-size:7px; font-weight:700; opacity:0.6; text-transform:uppercase; letter-spacing:0.5px; }' +
     '.mtprev-val { font-family:"Segoe UI",Arial,sans-serif; font-size:18px; font-weight:700; line-height:1; }' +
     '#mtprev-t-wthr .mtprev-face { flex-direction:row; align-items:center; justify-content:space-around; padding:6px 10px; }' +
-    '.mtprev-wthr-icon { font-size:32px; line-height:1; }' +
+    '.mtprev-wthr-icon { font-family:"MetroIcons"; font-size:32px; line-height:1; }' +
     '.mtprev-wthr-temps { display:flex; flex-direction:column; align-items:flex-start; gap:2px; }' +
     '.mtprev-wthr-high { font-family:"Segoe UI",Arial,sans-serif; font-size:20px; font-weight:300; line-height:1; }' +
     '.mtprev-wthr-low { font-family:"Segoe UI",Arial,sans-serif; font-size:14px; font-weight:300; opacity:0.75; line-height:1; }' +
@@ -100,7 +124,7 @@ module.exports = function(minified) {
     '.mtprev-batt-fill-h { height:100%; background:rgba(255,255,255,0.85); border-radius:2px; }' +
     '.mtprev-shell.mtprev-light .mtprev-batt-fill-h { background:rgba(0,0,0,0.85); }' +
     '.mtprev-batt-pct { font-family:"Segoe UI",Arial,sans-serif; font-size:11px; font-weight:700; white-space:nowrap; }' +
-    '.mtprev-icon { font-size:18px; opacity:0.85; line-height:1; }' +
+    '.mtprev-icon { font-family:"MetroIcons"; font-size:20px; opacity:0.9; line-height:1; }' +
     '.mtprev-icon-sm { font-size:15px; opacity:0.85; line-height:1; }' +
     '.mtprev-nav-arrow { position:absolute; bottom:7px; right:9px; width:14px; height:14px; }' +
     '.mtprev-nav-arrow svg polygon { fill:#fff; }' +
@@ -125,13 +149,11 @@ module.exports = function(minified) {
               '</div></div></div>' +
             '</div>' +
             '<div class="mtprev-row">' +
-              '<div class="mtprev-tile-wrap sq" id="mtprev-t-aqi"><div class="mtprev-tile"><div class="mtprev-face">' +
-                '<div class="mtprev-lbl">AQI</div>' +
-                '<span class="mdi mtprev-icon mdi-air-filter"></span>' +
-                '<div class="mtprev-val">58</div>' +
+              '<div class="mtprev-tile-wrap sq mtprev-configurable" id="mtprev-t-aqi"><div class="mtprev-tile"><div class="mtprev-face">' +
+                '<div id="mtprev-face-a"></div>' +
               '</div></div></div>' +
               '<div class="mtprev-tile-wrap dbl" id="mtprev-t-wthr"><div class="mtprev-tile"><div class="mtprev-face">' +
-                '<span class="mdi mtprev-wthr-icon mdi-weather-partly-cloudy"></span>' +
+                '<span class="mtprev-wthr-icon">c</span>' +
                 '<div class="mtprev-wthr-temps">' +
                   '<div class="mtprev-wthr-high">21°C</div>' +
                   '<div class="mtprev-wthr-low">H 21°C L 14°C</div>' +
@@ -139,15 +161,11 @@ module.exports = function(minified) {
               '</div></div></div>' +
             '</div>' +
             '<div class="mtprev-row">' +
-              '<div class="mtprev-tile-wrap sq" id="mtprev-t-step"><div class="mtprev-tile"><div class="mtprev-face">' +
-                '<div class="mtprev-lbl">STEPS</div>' +
-                '<span class="mdi mtprev-icon mdi-walk"></span>' +
-                '<div class="mtprev-step-val">5362</div>' +
+              '<div class="mtprev-tile-wrap sq mtprev-configurable" id="mtprev-t-step"><div class="mtprev-tile"><div class="mtprev-face">' +
+                '<div id="mtprev-face-b"></div>' +
               '</div></div></div>' +
-              '<div class="mtprev-tile-wrap sq" id="mtprev-t-sleep"><div class="mtprev-tile"><div class="mtprev-face">' +
-                '<div class="mtprev-lbl">SLEEP</div>' +
-                '<span class="mdi mtprev-icon mdi-sleep"></span>' +
-                '<div class="mtprev-sleep-val">7h23</div>' +
+              '<div class="mtprev-tile-wrap sq mtprev-configurable" id="mtprev-t-sleep"><div class="mtprev-tile"><div class="mtprev-face">' +
+                '<div id="mtprev-face-c"></div>' +
               '</div></div></div>' +
               '<div class="mtprev-tile-wrap sq" id="mtprev-t-batt"><div class="mtprev-tile"><div class="mtprev-face">' +
                 '<div class="mtprev-lbl">BATT</div>' +
@@ -169,16 +187,6 @@ module.exports = function(minified) {
     '</div>';
 
   clayConfig.on(clayConfig.EVENTS.AFTER_BUILD, function() {
-    // MDI icon font — fetched at runtime by the webview's own browser, not
-    // a build-time dependency, so this is fine to reference by URL here.
-    if (!document.getElementById('mtprev-mdi-link')) {
-      var link = document.createElement('link');
-      link.id = 'mtprev-mdi-link';
-      link.rel = 'stylesheet';
-      link.href = 'https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css';
-      document.head.appendChild(link);
-    }
-
     // Insert the preview at the very top of the page, above every config
     // section, so it's visible immediately without scrolling while the
     // person changes settings below it.
@@ -210,6 +218,70 @@ module.exports = function(minified) {
     if (accentItem) accentItem.on('change', applyPreviewState);
     if (themeItem)  themeItem.on('change', applyPreviewState);
     applyPreviewState();
+
+    // ─── Hide heart rate on watches without the sensor ─────────────────────
+    // Clay exposes the connected watch through clayConfig.meta. Basalt
+    // (Pebble Time / Time Steel) has no optical HR sensor at all, so the
+    // option is removed from the dropdowns rather than offered and then
+    // showing "n/a" forever. Guarded: meta may be absent on older phone-app
+    // versions, in which case the option simply stays listed.
+    var watchInfo = clayConfig.meta && clayConfig.meta.activeWatchInfo;
+    var platform  = watchInfo ? watchInfo.platform : null;
+    var HRM_VALUE = '5';
+
+    // ─── Configurable tiles: mirror the selectors into the preview ─────────
+    // Sample values only -- the settings page has no access to live sensor
+    // or weather data.
+    var TILE_SLOTS = [
+      { key:'tile_a_select', sfx:'a', dflt:0 },
+      { key:'tile_b_select', sfx:'b', dflt:1 },
+      { key:'tile_c_select', sfx:'c', dflt:2 }
+    ];
+
+    function esc(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    function renderFace(el, c) {
+      if (!el) return;
+      if (c.dual) {
+        el.innerHTML =
+          '<div class="mtprev-lbl">' + esc(c.t) + '</div>' +
+          '<div class="mtprev-t2row"><span class="mtprev-t2icon">' + esc(c.l1i) +
+            '</span><span class="mtprev-t2val">' + esc(c.l1v) + '</span></div>' +
+          '<div class="mtprev-t2row"><span class="mtprev-t2icon">' + esc(c.l2i) +
+            '</span><span class="mtprev-t2val">' + esc(c.l2v) + '</span></div>';
+      } else {
+        el.innerHTML =
+          '<div class="mtprev-lbl">' + esc(c.t) + '</div>' +
+          '<span class="mtprev-icon">' + esc(c.icon) + '</span>' +
+          '<div class="mtprev-val">' + esc(c.v) + '</div>';
+      }
+    }
+
+    function applyTileSlot(slot) {
+      var item = clayConfig.getItemByMessageKey(slot.key);
+      var idx = item ? parseInt(item.get(), 10) : slot.dflt;
+      if (isNaN(idx) || idx < 0 || idx >= TILE_CONTENT.length) idx = slot.dflt;
+      renderFace(document.getElementById('mtprev-face-' + slot.sfx), TILE_CONTENT[idx]);
+    }
+
+    TILE_SLOTS.forEach(function(slot) {
+      var item = clayConfig.getItemByMessageKey(slot.key);
+
+      if (item && platform === 'basalt' && item.$element) {
+        var sel = item.$element[0] ? item.$element[0].querySelector('select')
+                                   : item.$element.querySelector('select');
+        if (sel) {
+          for (var i = sel.options.length - 1; i >= 0; i--) {
+            if (sel.options[i].value === HRM_VALUE) sel.remove(i);
+          }
+        }
+      }
+
+      if (item) item.on('change', function() { applyTileSlot(slot); });
+      applyTileSlot(slot);
+    });
 
     // Keep the clock ticking so the preview doesn't look frozen/dead.
     function tick() {

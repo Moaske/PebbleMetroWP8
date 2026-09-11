@@ -16,22 +16,70 @@
         "label": "Tile colour",
         "defaultValue": "#F0A30A",
         "options": [
-          { "label": "Amber",   "value": "#F0A30A" },
-          { "label": "Orange",  "value": "#FA6800" },
-          { "label": "Red",     "value": "#E51400" },
-          { "label": "Magenta", "value": "#FF0097" },
-          { "label": "Pink",    "value": "#E671B8" },
-          { "label": "Purple",  "value": "#7E3878" },
-          { "label": "Indigo",  "value": "#6A00FF" },
-          { "label": "Blue",    "value": "#0078D4" },
-          { "label": "Teal",    "value": "#00ABA9" },
-          { "label": "Emerald", "value": "#008A00" },
-          { "label": "Lime",    "value": "#8CBF26" },
-          { "label": "Brown",   "value": "#825A2C" },
-          { "label": "Steel",   "value": "#647687" },
-          { "label": "Cobalt",  "value": "#0050EF" },
-          { "label": "Violet",  "value": "#AA00FF" },
-          { "label": "Crimson", "value": "#A20025" }
+          {
+            "label": "Amber",
+            "value": "#F0A30A"
+          },
+          {
+            "label": "Orange",
+            "value": "#FA6800"
+          },
+          {
+            "label": "Red",
+            "value": "#E51400"
+          },
+          {
+            "label": "Magenta",
+            "value": "#FF0097"
+          },
+          {
+            "label": "Pink",
+            "value": "#E671B8"
+          },
+          {
+            "label": "Purple",
+            "value": "#7E3878"
+          },
+          {
+            "label": "Indigo",
+            "value": "#6A00FF"
+          },
+          {
+            "label": "Blue",
+            "value": "#0078D4"
+          },
+          {
+            "label": "Teal",
+            "value": "#00ABA9"
+          },
+          {
+            "label": "Emerald",
+            "value": "#008A00"
+          },
+          {
+            "label": "Lime",
+            "value": "#8CBF26"
+          },
+          {
+            "label": "Brown",
+            "value": "#825A2C"
+          },
+          {
+            "label": "Steel",
+            "value": "#647687"
+          },
+          {
+            "label": "Cobalt",
+            "value": "#0050EF"
+          },
+          {
+            "label": "Violet",
+            "value": "#AA00FF"
+          },
+          {
+            "label": "Crimson",
+            "value": "#A20025"
+          }
         ]
       }
     ]
@@ -49,8 +97,159 @@
         "label": "Style",
         "defaultValue": "dark",
         "options": [
-          { "label": "Dark (black background, white text)", "value": "dark" },
-          { "label": "Light (white background, black text)", "value": "light" }
+          {
+            "label": "Dark (black background, white text)",
+            "value": "dark"
+          },
+          {
+            "label": "Light (white background, black text)",
+            "value": "light"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "type": "section",
+    "items": [
+      {
+        "type": "heading",
+        "defaultValue": "Live Tile picker"
+      },
+      {
+        "type": "text",
+        "defaultValue": "Pick what each of the three outlined tiles shows. Time, date, weather and battery are fixed. Some tiles have additional settings further down this screen."
+      },
+      {
+        "type": "select",
+        "messageKey": "tile_a_select",
+        "label": "Middle row-left tile",
+        "defaultValue": "0",
+        "options": [
+          {
+            "label": "Air quality",
+            "value": "0"
+          },
+          {
+            "label": "Steps",
+            "value": "1"
+          },
+          {
+            "label": "Sleep",
+            "value": "2"
+          },
+          {
+            "label": "Moon phase",
+            "value": "3"
+          },
+          {
+            "label": "Rain",
+            "value": "4"
+          },
+          {
+            "label": "Heart rate",
+            "value": "5"
+          },
+          {
+            "label": "Calories",
+            "value": "6"
+          },
+          {
+            "label": "Week numbers",
+            "value": "7"
+          },
+          {
+            "label": "Sunrise/sunset",
+            "value": "8"
+          }
+        ]
+      },
+      {
+        "type": "select",
+        "messageKey": "tile_b_select",
+        "label": "Bottom row-left tile",
+        "defaultValue": "1",
+        "options": [
+          {
+            "label": "Air quality",
+            "value": "0"
+          },
+          {
+            "label": "Steps",
+            "value": "1"
+          },
+          {
+            "label": "Sleep",
+            "value": "2"
+          },
+          {
+            "label": "Moon phase",
+            "value": "3"
+          },
+          {
+            "label": "Rain",
+            "value": "4"
+          },
+          {
+            "label": "Heart rate",
+            "value": "5"
+          },
+          {
+            "label": "Calories",
+            "value": "6"
+          },
+          {
+            "label": "Week numbers",
+            "value": "7"
+          },
+          {
+            "label": "Sunrise/sunset",
+            "value": "8"
+          }
+        ]
+      },
+      {
+        "type": "select",
+        "messageKey": "tile_c_select",
+        "label": "Bottom row-middle tile",
+        "defaultValue": "2",
+        "options": [
+          {
+            "label": "Air quality",
+            "value": "0"
+          },
+          {
+            "label": "Steps",
+            "value": "1"
+          },
+          {
+            "label": "Sleep",
+            "value": "2"
+          },
+          {
+            "label": "Moon phase",
+            "value": "3"
+          },
+          {
+            "label": "Rain",
+            "value": "4"
+          },
+          {
+            "label": "Heart rate",
+            "value": "5"
+          },
+          {
+            "label": "Calories",
+            "value": "6"
+          },
+          {
+            "label": "Week numbers",
+            "value": "7"
+          },
+          {
+            "label": "Sunrise/sunset",
+            "value": "8"
+          }
         ]
       }
     ]
@@ -68,8 +267,14 @@
         "label": "Temperature",
         "defaultValue": "C",
         "options": [
-          { "label": "Celsius (°C)", "value": "C" },
-          { "label": "Fahrenheit (°F)", "value": "F" }
+          {
+            "label": "Celsius (\u00b0C)",
+            "value": "C"
+          },
+          {
+            "label": "Fahrenheit (\u00b0F)",
+            "value": "F"
+          }
         ]
       },
       {
@@ -78,19 +283,63 @@
         "label": "Date format",
         "defaultValue": "DMY",
         "options": [
-          { "label": "DD/MM", "value": "DMY" },
-          { "label": "MM/DD", "value": "MDY" }
+          {
+            "label": "DD/MM",
+            "value": "DMY"
+          },
+          {
+            "label": "MM/DD",
+            "value": "MDY"
+          }
         ]
       }
     ]
   },
   {
-    "type": "text",
-    "defaultValue": "The weekday name still follows your watch's language setting — this only controls the day/month order below it. Useful since the Pebble app's language picker doesn't distinguish English regions (e.g. UK vs US)."
+    "type": "section",
+    "items": [
+      {
+        "type": "heading",
+        "defaultValue": "Week numbers tile"
+      },
+      {
+        "type": "text",
+        "defaultValue": "First-day setting applies to both lines."
+      },
+      {
+        "type": "radiogroup",
+        "messageKey": "week_start_select",
+        "label": "First day of week",
+        "defaultValue": "1",
+        "options": [
+          {
+            "label": "Monday (ISO)",
+            "value": "1"
+          },
+          {
+            "label": "Sunday",
+            "value": "0"
+          }
+        ]
+      },
+      {
+        "type": "input",
+        "messageKey": "week_ref_date",
+        "label": "Offset week number start date",
+        "attributes": {
+          "type": "date",
+          "placeholder": "YYYY-MM-DD"
+        }
+      },
+      {
+        "type": "text",
+        "defaultValue": "Starts at week 00 for whichever week contains this date."
+      }
+    ]
   },
   {
     "type": "text",
-    "defaultValue": "Steps and sleep are read directly from Pebble Health on your watch — no setup needed here. Just make sure Pebble Health is enabled in the Pebble app (Apps/Timeline tab)."
+    "defaultValue": "Steps and sleep are read directly from Pebble Health on your watch. Just make sure Pebble Health is enabled in the Pebble app (Apps/Timeline tab)."
   },
   {
     "type": "submit",

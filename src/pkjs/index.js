@@ -69,12 +69,60 @@ function hexToRGB(hex) {
   };
 }
 
+// ─── "2026-09-11T07:14" -> minutes since local midnight ──────────────────────
+// Parsed by string, NOT via Date(): with timezone=auto the stamp is already
+// in the location's local time, and Date() would re-interpret it against the
+// phone's timezone -- silently wrong whenever the two differ.
+function isoLocalToMinutes(iso) {
+  if (!iso) return -1;
+  var t = iso.split('T')[1];
+  if (!t) return -1;
+  var p = t.split(':');
+  var h = parseInt(p[0], 10), m = parseInt(p[1], 10);
+  if (isNaN(h) || isNaN(m)) return -1;
+  return h * 60 + m;
+}
+
+// ─── "YYYY-MM-DD" -> days since 1970-01-01 ───────────────────────────────────
+// Sent as a plain integer so the watch never has to parse a date string.
+// Date.UTC (not local) keeps the day number stable regardless of the phone's
+// timezone -- it is a calendar date, not an instant.
+function dateToDayNumber(s) {
+  if (!s) return -1;
+  var m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(String(s).trim());
+  if (!m) return -1;
+  return Math.floor(Date.UTC(+m[1], +m[2] - 1, +m[3]) / 86400000);
+}
+
+// ─── Precipitation probability for the COMING hour ───────────────────────────
+// Finds the first hourly entry strictly later than now rather than assuming
+// index == hour, which breaks the moment the array does not start at midnight.
+function nextHourPrecipProbability(data) {
+  try {
+    if (!data.hourly || !data.hourly.time || !data.hourly.precipitation_probability) return -1;
+    var now = new Date();
+    var nowMin = now.getHours() * 60 + now.getMinutes();
+    var times = data.hourly.time, probs = data.hourly.precipitation_probability;
+    for (var i = 0; i < times.length; i++) {
+      if (isoLocalToMinutes(times[i]) > nowMin) {
+        var p = probs[i];
+        return (p == null) ? -1 : Math.round(p);
+      }
+    }
+    return -1;
+  } catch (e) {
+    console.log('Precip parse error: ' + e);
+    return -1;
+  }
+}
+
 // ─── Fetch weather + AQI from Open-Meteo ─────────────────────────────────────
 function fetchWeatherAndAQI(lat, lon) {
   var weatherUrl = 'https://api.open-meteo.com/v1/forecast' +
     '?latitude=' + lat + '&longitude=' + lon +
     '&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset' +
-    '&current=weather_code,temperature_2m' +
+    '&current=weather_code,temperature_2m,uv_index,wind_speed_10m,wind_direction_10m' +
+    '&hourly=precipitation_probability' +
     '&timezone=auto' +
     '&forecast_days=1';
 
@@ -100,6 +148,17 @@ function fetchWeatherAndAQI(lat, lon) {
         var tempCurrent = Math.round(data.current.temperature_2m);
         var iconIdx    = wmoToIconIndex(wmoCurrent);
 
+        // Day/night icon choice is made ON THE WATCH, not here: weather only
+        // refreshes every 30 min, so baking it in would leave the icon wrong
+        // for up to half an hour after sunset.
+        var sunriseMin = isoLocalToMinutes(data.daily.sunrise[0]);
+        var sunsetMin  = isoLocalToMinutes(data.daily.sunset[0]);
+        // UV sent as index*10 to keep one decimal using plain integers.
+        var uvX10      = (data.current.uv_index != null) ? Math.round(data.current.uv_index * 10) : -1;
+        var windSpeed  = (data.current.wind_speed_10m != null) ? Math.round(data.current.wind_speed_10m) : -1;
+        var windDir    = (data.current.wind_direction_10m != null) ? Math.round(data.current.wind_direction_10m) : -1;
+        var precipProb = nextHourPrecipProbability(data);
+
         // Sunrise/sunset come back as local ISO strings ("2026-09-11T07:14").
         // Send them as minutes-since-midnight so the watch can compare them
         // against its own local clock with plain integer maths.
@@ -117,6 +176,12 @@ function fetchWeatherAndAQI(lat, lon) {
         msg[messageKeys.TEMP_HIGH]    = tempHigh;
         msg[messageKeys.TEMP_LOW]     = tempLow;
         msg[messageKeys.TEMP_CURRENT] = tempCurrent;
+        if (sunriseMin >= 0) msg[messageKeys.SUNRISE_MIN] = sunriseMin;
+        if (sunsetMin  >= 0) msg[messageKeys.SUNSET_MIN]  = sunsetMin;
+        if (uvX10      >= 0) msg[messageKeys.UV_INDEX]    = uvX10;
+        if (windSpeed  >= 0) msg[messageKeys.WIND_SPEED]  = windSpeed;
+        if (windDir    >= 0) msg[messageKeys.WIND_DIR]    = windDir;
+        if (precipProb >= 0) msg[messageKeys.PRECIP_PROB] = precipProb;
         if (sunriseMin >= 0) msg[messageKeys.SUNRISE_MIN] = sunriseMin;
         if (sunsetMin  >= 0) msg[messageKeys.SUNSET_MIN]  = sunsetMin;
 
@@ -276,6 +341,19 @@ Pebble.addEventListener('webviewclosed', function(e) {
   var dateOrder = settings[messageKeys.date_order_select];  // 'DMY' or 'MDY'
   var rgb       = hexToRGB(hex);
 
+  // Clay select values are strings; the watch wants numeric ContentIds.
+  // parseInt with a fallback keeps a missing/malformed value from being
+  // sent as NaN.
+  function intSetting(key, dflt) {
+    var v = parseInt(settings[key], 10);
+    return isNaN(v) ? dflt : v;
+  }
+  var tileA     = intSetting(messageKeys.tile_a_select, 0);
+  var tileB     = intSetting(messageKeys.tile_b_select, 1);
+  var tileC     = intSetting(messageKeys.tile_c_select, 2);
+  var weekStart = intSetting(messageKeys.week_start_select, 1);
+  var weekRefDn = dateToDayNumber(settings[messageKeys.week_ref_date]);
+
   var msg = {};
   msg[messageKeys.ACCENT_R] = rgb.r;
   msg[messageKeys.ACCENT_G] = rgb.g;
@@ -283,10 +361,17 @@ Pebble.addEventListener('webviewclosed', function(e) {
   msg[messageKeys.THEME]      = (theme === 'light') ? 1 : 0;
   msg[messageKeys.TEMP_UNIT]  = (tempUnit === 'F') ? 1 : 0;
   msg[messageKeys.DATE_ORDER] = (dateOrder === 'MDY') ? 1 : 0;
+  msg[messageKeys.TILE_A]     = tileA;
+  msg[messageKeys.TILE_B]     = tileB;
+  msg[messageKeys.TILE_C]     = tileC;
+  msg[messageKeys.WEEK_START] = (weekStart === 0) ? 0 : 1;
+  if (weekRefDn >= 0) msg[messageKeys.WEEK_REF_DN] = weekRefDn;
 
   Pebble.sendAppMessage(msg, function() {
     console.log('Settings sent: accent=' + hex + ' theme=' + theme +
-                ' tempUnit=' + tempUnit + ' dateOrder=' + dateOrder);
+                ' tempUnit=' + tempUnit + ' dateOrder=' + dateOrder +
+                ' tiles=' + tileA + '/' + tileB + '/' + tileC +
+                ' weekStart=' + weekStart + ' weekRefDn=' + weekRefDn);
   }, function(err) {
     console.log('Settings send failed: ' + JSON.stringify(err));
   });

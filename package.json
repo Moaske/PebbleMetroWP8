@@ -35,13 +35,27 @@
             "DATE_ORDER",
             "date_order_select",
             "SUNRISE_MIN",
-            "SUNSET_MIN"
+            "SUNSET_MIN",
+            "UV_INDEX",
+            "WIND_SPEED",
+            "WIND_DIR",
+            "PRECIP_PROB",
+            "TILE_A",
+            "TILE_B",
+            "TILE_C",
+            "tile_a_select",
+            "tile_b_select",
+            "tile_c_select",
+            "WEEK_START",
+            "WEEK_REF_DN",
+            "week_start_select",
+            "week_ref_date"
         ],
         "projectType": "native",
         "resources": {
             "media": [
                 {
-                    "characterRegex": "[0-9A-Za-z%\u00b0/ -]",
+                    "characterRegex": "[0-9A-Za-z%\u00b0/ :?-]",
                     "file": "fonts/segoeui.ttf",
                     "name": "FONT_REGULAR_12",
                     "targetPlatforms": [
@@ -50,7 +64,7 @@
                     "type": "font"
                 },
                 {
-                    "characterRegex": "[0-9A-Za-z%\u00b0/ -]",
+                    "characterRegex": "[0-9A-Za-z%\u00b0/ :?-]",
                     "file": "fonts/segoeui.ttf",
                     "name": "FONT_REGULAR_9",
                     "targetPlatforms": [
@@ -59,7 +73,7 @@
                     "type": "font"
                 },
                 {
-                    "characterRegex": "[0-9A-Za-z%\u00b0/ -]",
+                    "characterRegex": "[0-9A-Za-z%\u00b0/ :?-]",
                     "file": "fonts/segoeuib.ttf",
                     "name": "FONT_BOLD_18",
                     "targetPlatforms": [
@@ -68,7 +82,7 @@
                     "type": "font"
                 },
                 {
-                    "characterRegex": "[0-9A-Za-z%\u00b0/ -]",
+                    "characterRegex": "[0-9A-Za-z%\u00b0/ :?-]",
                     "file": "fonts/segoeuib.ttf",
                     "name": "FONT_BOLD_13",
                     "targetPlatforms": [
@@ -102,7 +116,7 @@
                     "type": "bitmap"
                 },
                 {
-                    "characterRegex": "[0-9A-Za-z%\u00b0/ -]",
+                    "characterRegex": "[0-9A-Za-z%\u00b0/ :?-]",
                     "file": "fonts/seguisb.ttf",
                     "name": "FONT_SEGOEUISB_14",
                     "targetPlatforms": [
@@ -111,7 +125,7 @@
                     "type": "font"
                 },
                 {
-                    "characterRegex": "[0-9A-Za-z%\u00b0/ -]",
+                    "characterRegex": "[0-9A-Za-z%\u00b0/ :?-]",
                     "file": "fonts/seguisb.ttf",
                     "name": "FONT_SEGOEUISB_10",
                     "targetPlatforms": [
@@ -120,7 +134,7 @@
                     "type": "font"
                 },
                 {
-                    "characterRegex": "[a-oA-H0-9:;<=]",
+                    "characterRegex": "[a-oA-H0-9:;<=>?@]",
                     "file": "fonts/MetroIcons.ttf",
                     "name": "FONT_ICONS_36",
                     "targetPlatforms": [
@@ -129,7 +143,7 @@
                     "type": "font"
                 },
                 {
-                    "characterRegex": "[a-oA-H0-9:;<=]",
+                    "characterRegex": "[a-oA-H0-9:;<=>?@]",
                     "file": "fonts/MetroIcons.ttf",
                     "name": "FONT_ICONS_28",
                     "targetPlatforms": [
@@ -138,7 +152,7 @@
                     "type": "font"
                 },
                 {
-                    "characterRegex": "[a-oA-H0-9:;<=]",
+                    "characterRegex": "[a-oA-H0-9:;<=>?@]",
                     "file": "fonts/MetroIcons.ttf",
                     "name": "FONT_ICONS_26",
                     "targetPlatforms": [
@@ -147,7 +161,7 @@
                     "type": "font"
                 },
                 {
-                    "characterRegex": "[a-oA-H0-9:;<=]",
+                    "characterRegex": "[a-oA-H0-9:;<=>?@]",
                     "file": "fonts/MetroIcons.ttf",
                     "name": "FONT_ICONS_20",
                     "targetPlatforms": [
@@ -156,7 +170,7 @@
                     "type": "font"
                 },
                 {
-                    "characterRegex": "[a-oA-H0-9:;<=]",
+                    "characterRegex": "[a-oA-H0-9:;<=>?@]",
                     "file": "fonts/MetroIcons.ttf",
                     "name": "FONT_ICONS_24",
                     "targetPlatforms": [
@@ -165,7 +179,7 @@
                     "type": "font"
                 },
                 {
-                    "characterRegex": "[a-oA-H0-9:;<=]",
+                    "characterRegex": "[a-oA-H0-9:;<=>?@]",
                     "file": "fonts/MetroIcons.ttf",
                     "name": "FONT_ICONS_17",
                     "targetPlatforms": [
@@ -174,7 +188,7 @@
                     "type": "font"
                 },
                 {
-                    "characterRegex": "[a-oA-H0-9:;<=]",
+                    "characterRegex": "[a-oA-H0-9:;<=>?@]",
                     "file": "fonts/MetroIcons.ttf",
                     "name": "FONT_ICONS_12",
                     "targetPlatforms": [
@@ -183,9 +197,27 @@
                     "type": "font"
                 },
                 {
-                    "characterRegex": "[a-oA-H0-9:;<=]",
+                    "characterRegex": "[a-oA-H0-9:;<=>?@]",
                     "file": "fonts/MetroIcons.ttf",
                     "name": "FONT_ICONS_10",
+                    "targetPlatforms": [
+                        "basalt"
+                    ],
+                    "type": "font"
+                },
+                {
+                    "characterRegex": "[a-oA-H0-9:;<=>?@]",
+                    "file": "fonts/MetroIcons.ttf",
+                    "name": "FONT_ICONS_18",
+                    "targetPlatforms": [
+                        "emery"
+                    ],
+                    "type": "font"
+                },
+                {
+                    "characterRegex": "[a-oA-H0-9:;<=>?@]",
+                    "file": "fonts/MetroIcons.ttf",
+                    "name": "FONT_ICONS_13",
                     "targetPlatforms": [
                         "basalt"
                     ],
@@ -203,5 +235,5 @@
             "watchface": true
         }
     },
-    "version": "1.4.6"
+    "version": "1.5.0"
 }
