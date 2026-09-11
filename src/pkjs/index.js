@@ -43,6 +43,22 @@ function wmoToIconIndex(code) {
   return 2; // default: partly cloudy
 }
 
+// ─── "2026-09-11T07:14" -> minutes since local midnight ──────────────────────
+// Parsed by string, not via Date(): the timestamp Open-Meteo returns is
+// already in the location's local time (timezone=auto), and feeding it to
+// Date() would have it re-interpreted against the PHONE's timezone, which
+// silently breaks whenever the two differ.
+function isoLocalToMinutes(iso) {
+  if (!iso) return -1;
+  var t = iso.split('T')[1];
+  if (!t) return -1;
+  var parts = t.split(':');
+  var h = parseInt(parts[0], 10);
+  var m = parseInt(parts[1], 10);
+  if (isNaN(h) || isNaN(m)) return -1;
+  return h * 60 + m;
+}
+
 // ─── Hex colour → R,G,B 0–255 ────────────────────────────────────────────────
 function hexToRGB(hex) {
   hex = hex.replace('#', '');
@@ -57,7 +73,7 @@ function hexToRGB(hex) {
 function fetchWeatherAndAQI(lat, lon) {
   var weatherUrl = 'https://api.open-meteo.com/v1/forecast' +
     '?latitude=' + lat + '&longitude=' + lon +
-    '&daily=weather_code,temperature_2m_max,temperature_2m_min' +
+    '&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset' +
     '&current=weather_code,temperature_2m' +
     '&timezone=auto' +
     '&forecast_days=1';
@@ -84,15 +100,30 @@ function fetchWeatherAndAQI(lat, lon) {
         var tempCurrent = Math.round(data.current.temperature_2m);
         var iconIdx    = wmoToIconIndex(wmoCurrent);
 
+        // Sunrise/sunset come back as local ISO strings ("2026-09-11T07:14").
+        // Send them as minutes-since-midnight so the watch can compare them
+        // against its own local clock with plain integer maths.
+        //
+        // The day/night decision is deliberately made ON THE WATCH, not
+        // here: weather only refreshes every 30 minutes, so if this side
+        // baked "it's night" into the icon index, the icon would stay wrong
+        // for up to half an hour after the sun actually set. Sending the
+        // times instead lets the watch flip the icon at the right moment.
+        var sunriseMin = isoLocalToMinutes(data.daily.sunrise[0]);
+        var sunsetMin  = isoLocalToMinutes(data.daily.sunset[0]);
+
         var msg = {};
         msg[messageKeys.WEATHER_CODE] = iconIdx;
         msg[messageKeys.TEMP_HIGH]    = tempHigh;
         msg[messageKeys.TEMP_LOW]     = tempLow;
         msg[messageKeys.TEMP_CURRENT] = tempCurrent;
+        if (sunriseMin >= 0) msg[messageKeys.SUNRISE_MIN] = sunriseMin;
+        if (sunsetMin  >= 0) msg[messageKeys.SUNSET_MIN]  = sunsetMin;
 
         Pebble.sendAppMessage(msg, function() {
           console.log('Weather sent: wmoCurrent=' + wmoCurrent + ' wmoDaily=' + wmoDaily +
-                      ' icon=' + iconIdx + ' cur=' + tempCurrent + ' H=' + tempHigh + ' L=' + tempLow);
+                      ' icon=' + iconIdx + ' cur=' + tempCurrent + ' H=' + tempHigh + ' L=' + tempLow +
+                      ' sunrise=' + sunriseMin + ' sunset=' + sunsetMin);
         }, function(e) {
           console.log('Weather send failed: ' + JSON.stringify(e));
         });
