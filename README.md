@@ -13,6 +13,7 @@ Current version: 1.5.0
 - Calories birned today
 - Sunrise/sunset
 - Week numbers (😎 personal need)
+
 And more to come.
 
 ## Features
