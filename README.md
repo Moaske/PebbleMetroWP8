@@ -1,7 +1,7 @@
 # Pebble Metro WP8
 Retro Windows Phone 8 Metro style watchface.
 For Pebble Time 2, Time and Time Steel (Emery & Basalt).<br>
-Current version: 1.5.0
+Current version: 1.5.1
 
 ## NEW! Selectable Live Tiles. Available Tiles:
 - Air quality
@@ -13,6 +13,7 @@ Current version: 1.5.0
 - Calories burned today
 - Sunrise/sunset
 - Week numbers (😎 personal need)
+- Windspeed and direction
 
 And more to come.
 
