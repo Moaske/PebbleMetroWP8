@@ -9,7 +9,7 @@ Current version: 1.5.0
 - Daily sleep total
 - Moon phase
 - Rain forecast
-- Heart rate
+- Heart rate (Emery only of course)
 - Calories birned today
 - Sunrise/sunset
 - Week numbers (😎 personal need)
