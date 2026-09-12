@@ -34,7 +34,7 @@
   #define T2_LINE2_Y      VALUE_Y_OFFSET
   #define T2_LINE1_Y      (T2_LINE2_Y - T2_ICON_SIZE)
   #define T2_LINE_H       (T2_ICON_SIZE + 4)
-  #define T2_LABEL_W      21   // FONT_ICONS_18 glyph (18px measured) + gap
+  #define T2_LABEL_W      23   // 18px icon + 5px clear space before the value
   // Icon and text share a row box, and Pebble draws both from the box top.
   // The 18pt icon's ink therefore hangs ~4px below the 14pt text's (roughly
   // the point-size difference), so the icon is lifted rather than the text
@@ -84,7 +84,7 @@
   #define T2_LINE2_Y      VALUE_Y_OFFSET
   #define T2_LINE1_Y      (T2_LINE2_Y - T2_ICON_SIZE)
   #define T2_LINE_H       (T2_ICON_SIZE + 4)
-  #define T2_LABEL_W      16   // FONT_ICONS_13 glyph (13px measured) + gap
+  #define T2_LABEL_W      16   // 13px icon + 3px clear space before the value
   #define T2_ICON_Y_NUDGE (-3)   // 13pt icon vs 10pt text
 
   #define WEATHER_LEFT_MARGIN    4
@@ -146,6 +146,7 @@
 #define KEY_TILE_C       MESSAGE_KEY_TILE_C
 #define KEY_WEEK_START   MESSAGE_KEY_WEEK_START   // 0 = Sunday, 1 = Monday
 #define KEY_WEEK_REF_DN  MESSAGE_KEY_WEEK_REF_DN  // offset-week start, days since 1970-01-01
+#define KEY_WIND_UNIT    MESSAGE_KEY_WIND_UNIT     // 0 = km/h, 1 = mph
 #define KEY_THEME        MESSAGE_KEY_THEME
 #define KEY_TEMP_UNIT    MESSAGE_KEY_TEMP_UNIT
 #define KEY_DATE_ORDER   MESSAGE_KEY_DATE_ORDER
@@ -178,6 +179,7 @@
 #define PERSIST_WEEK_START   121
 #define PERSIST_WEEK_REF_DN  122
 #define PERSIST_HRM_LAST     123
+#define PERSIST_WIND_UNIT    124
 
 #define FLIP_DURATION_MS   200
 #define FLIP_DELAY_MS      1000
@@ -193,6 +195,7 @@ static uint8_t s_accent_r = 240, s_accent_g = 163, s_accent_b = 10; // WP Amber
 static bool s_theme_light = false;
 static bool s_temp_unit_fahrenheit = false;
 static bool s_date_order_mdy = false;
+static bool s_wind_unit_mph  = false;  // false = km/h (what Open-Meteo returns)
 
 static int  s_aqi          = 0;
 static int  s_wmo_icon     = 0;
@@ -324,6 +327,7 @@ typedef enum {
   CONTENT_CALORIES,
   CONTENT_WEEKNR,
   CONTENT_SUNSET,
+  CONTENT_WIND,
   CONTENT_COUNT
 } ContentId;
 
@@ -507,6 +511,34 @@ static int display_temp(int c) {
 }
 static char temp_unit_char(void) { return s_temp_unit_fahrenheit ? 'F' : 'C'; }
 
+// Wind always arrives in km/h; convert at draw time so a unit change needs
+// no refetch. Integer maths: 0.621371 mph per km/h, rounded.
+static int display_wind(int kmh) {
+  if (!s_wind_unit_mph) return kmh;
+  return (kmh * 6214 + 5000) / 10000;
+}
+static const char *wind_unit_str(void) { return s_wind_unit_mph ? "mph" : "km/h"; }
+
+// ─── Wind direction arrow ────────────────────────────────────────────────────
+// graphics_draw_text cannot rotate a glyph -- Pebble has no text rotation API
+// at all -- so the font carries 16 pre-rotated copies of the navigation arrow
+// at 'I'..'X' (22.5 degree steps, clockwise from north). This helper is the
+// only thing that knows about them, which keeps the tile templates untouched.
+//
+// Open-Meteo reports the direction the wind blows FROM (meteorological
+// convention). An arrow is far more readable pointing where the wind is
+// going, so 180 degrees is added: wind from the north (0) draws an arrow
+// pointing south, and the unrotated north-pointing glyph means wind from
+// the south -- which matches how the base icon reads.
+static const char *wind_arrow_glyph(int dir_deg) {
+  static char glyph[2] = { 'I', '\0' };
+  if (dir_deg < 0) return ICON_WIND_DIR;   // unknown: unrotated base arrow
+  int to = (dir_deg + 180) % 360;
+  int idx = ((to * 2 + 22) / 45) % 16;     // round(to / 22.5) without floats
+  glyph[0] = (char)('I' + idx);
+  return glyph;
+}
+
 // Open-Meteo's documented european_aqi bands.
 static const char *aqi_classification(int aqi) {
   if (aqi < 20)  return "Good";
@@ -655,6 +687,18 @@ static void tile_spec_for(ContentId id, TileSpec *s) {
       s->l2_value = s->buf2;
       break;
 
+    case CONTENT_WIND:
+      s->title = "WIND";
+      s->icon  = wind_arrow_glyph(s_wind_dir);
+      if (s_wind_speed < 0) {
+        s->value = "--";
+      } else {
+        snprintf(s->buf1, sizeof(s->buf1), "%d %s",
+                 display_wind(s_wind_speed), wind_unit_str());
+        s->value = s->buf1;
+      }
+      break;
+
     default:
       s->title = "";
       break;
@@ -701,10 +745,13 @@ static void draw_template_dual(GContext *ctx, GRect inner, int px, const TileSpe
     graphics_draw_text(ctx, icons[i], s_font_icon_t2, lab_r,
                        GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
 
+    // Left-aligned, so the value sits directly after the icon column. The
+    // spacing comes from T2_LABEL_W being wider than the glyph itself
+    // rather than from a separate padding value.
     GRect val_r = GRect(inner.origin.x + T2_LABEL_W, inner.origin.y + ys[i],
                         inner.size.w + px - T2_LABEL_W, T2_LINE_H);
     graphics_draw_text(ctx, values[i], s_font_sb, val_r,
-                       GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
+                       GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
   }
 }
 
@@ -992,6 +1039,10 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
     s_week_start = (t->value->int32 == 0) ? 0 : 1;
     persist_write_int(PERSIST_WEEK_START, s_week_start);
   }
+  if ((t = dict_find(iter, KEY_WIND_UNIT))) {
+    s_wind_unit_mph = (t->value->int32 == 1);
+    persist_write_int(PERSIST_WIND_UNIT, t->value->int32);
+  }
   if ((t = dict_find(iter, KEY_WEEK_REF_DN))) {
     s_week_ref_dn = (long)t->value->int32;
     persist_write_int(PERSIST_WEEK_REF_DN, (int32_t)s_week_ref_dn);
@@ -1110,6 +1161,7 @@ static void init(void) {
   if (persist_exists(PERSIST_THEME))      s_theme_light = (persist_read_int(PERSIST_THEME) == 1);
   if (persist_exists(PERSIST_TEMP_UNIT))  s_temp_unit_fahrenheit = (persist_read_int(PERSIST_TEMP_UNIT) == 1);
   if (persist_exists(PERSIST_DATE_ORDER)) s_date_order_mdy = (persist_read_int(PERSIST_DATE_ORDER) == 1);
+  if (persist_exists(PERSIST_WIND_UNIT))  s_wind_unit_mph = (persist_read_int(PERSIST_WIND_UNIT) == 1);
   if (persist_exists(PERSIST_WEEK_START)) s_week_start = (persist_read_int(PERSIST_WEEK_START) == 0) ? 0 : 1;
   if (persist_exists(PERSIST_WEEK_REF_DN)) s_week_ref_dn = (long)persist_read_int(PERSIST_WEEK_REF_DN);
   if (persist_exists(PERSIST_HRM_LAST))   s_hrm_last = persist_read_int(PERSIST_HRM_LAST);

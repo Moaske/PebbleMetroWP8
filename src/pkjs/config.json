@@ -161,6 +161,10 @@
           {
             "label": "Sunrise/sunset",
             "value": "8"
+          },
+          {
+            "label": "Wind",
+            "value": "9"
           }
         ]
       },
@@ -205,6 +209,10 @@
           {
             "label": "Sunrise/sunset",
             "value": "8"
+          },
+          {
+            "label": "Wind",
+            "value": "9"
           }
         ]
       },
@@ -249,6 +257,10 @@
           {
             "label": "Sunrise/sunset",
             "value": "8"
+          },
+          {
+            "label": "Wind",
+            "value": "9"
           }
         ]
       }
@@ -290,6 +302,22 @@
           {
             "label": "MM/DD",
             "value": "MDY"
+          }
+        ]
+      },
+      {
+        "type": "radiogroup",
+        "messageKey": "wind_unit_select",
+        "label": "Wind speed",
+        "defaultValue": "kmh",
+        "options": [
+          {
+            "label": "km/h",
+            "value": "kmh"
+          },
+          {
+            "label": "mph",
+            "value": "mph"
           }
         ]
       }

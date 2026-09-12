@@ -353,6 +353,7 @@ Pebble.addEventListener('webviewclosed', function(e) {
   var tileC     = intSetting(messageKeys.tile_c_select, 2);
   var weekStart = intSetting(messageKeys.week_start_select, 1);
   var weekRefDn = dateToDayNumber(settings[messageKeys.week_ref_date]);
+  var windUnit  = settings[messageKeys.wind_unit_select];   // 'kmh' or 'mph'
 
   var msg = {};
   msg[messageKeys.ACCENT_R] = rgb.r;
@@ -365,13 +366,15 @@ Pebble.addEventListener('webviewclosed', function(e) {
   msg[messageKeys.TILE_B]     = tileB;
   msg[messageKeys.TILE_C]     = tileC;
   msg[messageKeys.WEEK_START] = (weekStart === 0) ? 0 : 1;
+  msg[messageKeys.WIND_UNIT]  = (windUnit === 'mph') ? 1 : 0;
   if (weekRefDn >= 0) msg[messageKeys.WEEK_REF_DN] = weekRefDn;
 
   Pebble.sendAppMessage(msg, function() {
     console.log('Settings sent: accent=' + hex + ' theme=' + theme +
                 ' tempUnit=' + tempUnit + ' dateOrder=' + dateOrder +
                 ' tiles=' + tileA + '/' + tileB + '/' + tileC +
-                ' weekStart=' + weekStart + ' weekRefDn=' + weekRefDn);
+                ' weekStart=' + weekStart + ' weekRefDn=' + weekRefDn +
+                ' windUnit=' + windUnit);
   }, function(err) {
     console.log('Settings send failed: ' + JSON.stringify(err));
   });
