@@ -10,7 +10,7 @@ Current version: 1.5.0
 - Moon phase
 - Rain forecast
 - Heart rate (Emery only of course; option hidden for Basalt)
-- Calories birned today
+- Calories burned today
 - Sunrise/sunset
 - Week numbers (😎 personal need)
 
