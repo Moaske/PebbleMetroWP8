@@ -9,7 +9,7 @@ Current version: 1.5.0
 - Daily sleep total
 - Moon phase
 - Rain forecast
-- Heart rate (Emery only of course)
+- Heart rate (Emery only of course; option hidden for Basalt)
 - Calories birned today
 - Sunrise/sunset
 - Week numbers (😎 personal need)
