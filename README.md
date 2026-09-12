@@ -14,6 +14,8 @@ Current version: 1.5.1
 - Sunrise/sunset
 - Week numbers (😎 personal need)
 - Windspeed and direction
+- UV Index
+- UV/Smog (bare UV number & Ozone (O3) reading)
 
 And more to come.
 
