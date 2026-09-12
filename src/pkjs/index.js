@@ -201,7 +201,7 @@ function fetchWeatherAndAQI(lat, lon) {
 
   var aqiUrl = 'https://air-quality-api.open-meteo.com/v1/air-quality' +
     '?latitude=' + lat + '&longitude=' + lon +
-    '&current=european_aqi' +
+    '&current=european_aqi,ozone' +
     '&timezone=auto';
 
   var xhr2 = new XMLHttpRequest();
@@ -210,11 +210,14 @@ function fetchWeatherAndAQI(lat, lon) {
     if (xhr2.readyState === 4 && xhr2.status === 200) {
       try {
         var data = JSON.parse(xhr2.responseText);
-        var aqi = Math.round(data.current.european_aqi);
+        var aqi   = Math.round(data.current.european_aqi);
+        // Ozone shares the air-quality request, so this costs no extra call.
+        var ozone = (data.current.ozone != null) ? Math.round(data.current.ozone) : -1;
         var msg = {};
         msg[messageKeys.AQI] = aqi;
+        if (ozone >= 0) msg[messageKeys.OZONE] = ozone;
         Pebble.sendAppMessage(msg, function() {
-          console.log('AQI sent: ' + aqi);
+          console.log('AQI sent: ' + aqi + ' ozone=' + ozone);
         }, function(e) {
           console.log('AQI send failed: ' + JSON.stringify(e));
         });

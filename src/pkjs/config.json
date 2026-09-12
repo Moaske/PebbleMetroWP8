@@ -165,6 +165,14 @@
           {
             "label": "Wind",
             "value": "9"
+          },
+          {
+            "label": "UV index",
+            "value": "10"
+          },
+          {
+            "label": "UV / Smog",
+            "value": "11"
           }
         ]
       },
@@ -213,6 +221,14 @@
           {
             "label": "Wind",
             "value": "9"
+          },
+          {
+            "label": "UV index",
+            "value": "10"
+          },
+          {
+            "label": "UV / Smog",
+            "value": "11"
           }
         ]
       },
@@ -261,6 +277,14 @@
           {
             "label": "Wind",
             "value": "9"
+          },
+          {
+            "label": "UV index",
+            "value": "10"
+          },
+          {
+            "label": "UV / Smog",
+            "value": "11"
           }
         ]
       }

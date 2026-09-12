@@ -35,6 +35,7 @@
   #define T2_LINE1_Y      (T2_LINE2_Y - T2_ICON_SIZE)
   #define T2_LINE_H       (T2_ICON_SIZE + 4)
   #define T2_LABEL_W      23   // 18px icon + 5px clear space before the value
+  #define T1_VAL_RIGHT_INSET 2  // pulls the value line in from the tile's right edge
   // Icon and text share a row box, and Pebble draws both from the box top.
   // The 18pt icon's ink therefore hangs ~4px below the 14pt text's (roughly
   // the point-size difference), so the icon is lifted rather than the text
@@ -85,6 +86,7 @@
   #define T2_LINE1_Y      (T2_LINE2_Y - T2_ICON_SIZE)
   #define T2_LINE_H       (T2_ICON_SIZE + 4)
   #define T2_LABEL_W      16   // 13px icon + 3px clear space before the value
+  #define T1_VAL_RIGHT_INSET 2
   #define T2_ICON_Y_NUDGE (-3)   // 13pt icon vs 10pt text
 
   #define WEATHER_LEFT_MARGIN    4
@@ -147,6 +149,7 @@
 #define KEY_WEEK_START   MESSAGE_KEY_WEEK_START   // 0 = Sunday, 1 = Monday
 #define KEY_WEEK_REF_DN  MESSAGE_KEY_WEEK_REF_DN  // offset-week start, days since 1970-01-01
 #define KEY_WIND_UNIT    MESSAGE_KEY_WIND_UNIT     // 0 = km/h, 1 = mph
+#define KEY_OZONE        MESSAGE_KEY_OZONE          // ug/m3
 #define KEY_THEME        MESSAGE_KEY_THEME
 #define KEY_TEMP_UNIT    MESSAGE_KEY_TEMP_UNIT
 #define KEY_DATE_ORDER   MESSAGE_KEY_DATE_ORDER
@@ -180,6 +183,7 @@
 #define PERSIST_WEEK_REF_DN  122
 #define PERSIST_HRM_LAST     123
 #define PERSIST_WIND_UNIT    124
+#define PERSIST_OZONE        125
 
 #define FLIP_DURATION_MS   200
 #define FLIP_DELAY_MS      1000
@@ -208,6 +212,7 @@ static int  s_uv_index_x10 = -1;   // UV * 10, keeps one decimal without floats
 static int  s_wind_speed   = -1;   // km/h
 static int  s_wind_dir     = -1;   // degrees
 static int  s_precip_prob  = -1;   // % chance, coming hour
+static int  s_ozone        = -1;   // ug/m3
 static int  s_week_start   = 1;    // 0 = Sunday, 1 = Monday (ISO default)
 static long s_week_ref_dn  = -1;   // offset-week start date, -1 = not configured
 // The system samples heart rate only every few minutes, so a peek very often
@@ -285,6 +290,9 @@ static const char *weather_icon_for(int idx) {
 #define ICON_WEEK_ISO   ";"
 #define ICON_WEEK_EDU   "<"
 #define ICON_ARROW      "="
+#define ICON_UV_ALERT   "Y"   // sun with alert - high UV
+#define ICON_ALERT      "Z"   // octagram - poor air quality / high ozone
+#define ICON_SMOG       "p"
 
 static const char *MOON_ICONS[] = { "A","B","C","D","E","F","G","H" };
 
@@ -328,6 +336,8 @@ typedef enum {
   CONTENT_WEEKNR,
   CONTENT_SUNSET,
   CONTENT_WIND,
+  CONTENT_UV,
+  CONTENT_UV_SMOG,
   CONTENT_COUNT
 } ContentId;
 
@@ -343,11 +353,35 @@ static ContentId s_slot[3] = { CONTENT_AQI, CONTENT_STEPS, CONTENT_SLEEP };
 #define MOON_REF_EPOCH   947182440L
 #define MOON_SYNODIC_SEC 2551443L
 
+// Half-width of the window in which one of the four PRINCIPAL phases (new,
+// first quarter, full, last quarter) is reported. Those are astronomical
+// instants, not periods -- an equal 8-way split gave each of them a 3.7-day
+// window, so "New Moon" stayed on screen for nearly two days after the moon
+// had visibly become a waxing crescent. Half a day either side matches what
+// almanacs and other watchfaces show.
+//
+// Note this is NOT a geolocation issue: the moon is ~384,000 km away, so
+// parallax across the whole Earth shifts the apparent phase by under 0.3% of
+// a cycle (~2 hours). The phase NAME is the same worldwide; only the
+// crescent's visual tilt changes with latitude.
+#define MOON_PRINCIPAL_WINDOW_SEC 43200L   // 0.5 day
+
 static int moon_phase_index(void) {
   long e = (long)time(NULL) - MOON_REF_EPOCH;
   e %= MOON_SYNODIC_SEC;
   if (e < 0) e += MOON_SYNODIC_SEC;
-  return (int)(((e * 8) + (MOON_SYNODIC_SEC / 2)) / MOON_SYNODIC_SEC) % 8;
+
+  const long W = MOON_PRINCIPAL_WINDOW_SEC;
+  const long Q = MOON_SYNODIC_SEC / 4;
+
+  if (e < W || e >= MOON_SYNODIC_SEC - W) return 0;  // New Moon
+  if (e < Q - W)                          return 1;  // Waxing crescent
+  if (e <= Q + W)                         return 2;  // First quarter
+  if (e < 2 * Q - W)                      return 3;  // Waxing gibbous
+  if (e <= 2 * Q + W)                     return 4;  // Full Moon
+  if (e < 3 * Q - W)                      return 5;  // Waning gibbous
+  if (e <= 3 * Q + W)                     return 6;  // Last quarter
+  return 7;                                          // Waning crescent
 }
 
 static const char *MOON_NAMES[] = {
@@ -355,14 +389,27 @@ static const char *MOON_NAMES[] = {
   "Full Moon","Waning Gib","Last Qtr","Waning Cres",
 };
 
+// ─── Alert thresholds ────────────────────────────────────────────────────────
+// Each governs only which icon a tile shows, never the value it prints.
+#define UV_ALERT_THRESHOLD     5    // UV index at/above which the sun icon gains an alert
+#define OZONE_ALERT_THRESHOLD  100  // ug/m3
+#define AQI_ALERT_THRESHOLD    60   // European AQI 60+ is "Poor" or worse
+#define WIND_SOCK_THRESHOLD    40   // km/h at/above which the arrow becomes a windsock
+
 // ─── UV classification (WHO bands) ───────────────────────────────────────────
+// Shared by both UV tiles so their icon rule can't drift apart.
+static const char *uv_alert_icon(void) {
+  if (s_uv_index_x10 < 0) return ICON_UV;
+  return (s_uv_index_x10 / 10 >= UV_ALERT_THRESHOLD) ? ICON_UV_ALERT : ICON_UV;
+}
+
 static const char *uv_classification(int uv_x10) {
   int uv = uv_x10 / 10;
   if (uv <= 2)  return "Low";
   if (uv <= 5)  return "Moderate";
   if (uv <= 7)  return "High";
-  if (uv <= 10) return "Very High";
-  return "Extreme";
+  if (uv <= 10) return "VHigh";
+  return "XHigh";
 }
 
 // ─── Week numbers ────────────────────────────────────────────────────────────
@@ -573,7 +620,9 @@ static void tile_spec_for(ContentId id, TileSpec *s) {
   switch (id) {
     case CONTENT_AQI:
       s->title = "AQI";
-      s->icon  = ICON_AQI;
+      // Compared on the raw index, not the classification string, so the
+      // icon switch and the "Poor" label can never disagree.
+      s->icon  = (s_aqi >= AQI_ALERT_THRESHOLD) ? ICON_ALERT : ICON_AQI;
       s->value = aqi_classification(s_aqi);
       break;
 
@@ -608,7 +657,7 @@ static void tile_spec_for(ContentId id, TileSpec *s) {
 
     case CONTENT_RAIN:
       s->title = "RAIN";
-      s->icon  = (s_precip_prob > 0) ? ICON_PRECIP : ICON_PRECIP_DRY;
+      s->icon  = (s_precip_prob > 10) ? ICON_PRECIP : ICON_PRECIP_DRY;
       if (s_precip_prob < 0) {
         s->value = "1hr: --";
       } else {
@@ -689,13 +738,47 @@ static void tile_spec_for(ContentId id, TileSpec *s) {
 
     case CONTENT_WIND:
       s->title = "WIND";
-      s->icon  = wind_arrow_glyph(s_wind_dir);
+      // Above the threshold the direction arrow gives way to a windsock --
+      // at that speed "it is blowing hard" matters more than the bearing.
+      s->icon  = (s_wind_speed >= WIND_SOCK_THRESHOLD)
+                   ? ICON_WIND : wind_arrow_glyph(s_wind_dir);
       if (s_wind_speed < 0) {
         s->value = "--";
       } else {
         snprintf(s->buf1, sizeof(s->buf1), "%d %s",
                  display_wind(s_wind_speed), wind_unit_str());
         s->value = s->buf1;
+      }
+      break;
+
+    case CONTENT_UV:
+      s->title = "UV";
+      s->icon  = uv_alert_icon();
+      if (s_uv_index_x10 < 0) {
+        s->value = "--";
+      } else {
+        snprintf(s->buf1, sizeof(s->buf1), "%d : %s",
+                 s_uv_index_x10 / 10, uv_classification(s_uv_index_x10));
+        s->value = s->buf1;
+      }
+      break;
+
+    case CONTENT_UV_SMOG:
+      s->title   = "UV/SMOG";
+      s->dual    = true;
+      s->l1_icon = uv_alert_icon();
+      s->l2_icon = (s_ozone >= OZONE_ALERT_THRESHOLD) ? ICON_ALERT : ICON_SMOG;
+      if (s_uv_index_x10 < 0) {
+        s->l1_value = "--";
+      } else {
+        snprintf(s->buf1, sizeof(s->buf1), "%d", s_uv_index_x10 / 10);
+        s->l1_value = s->buf1;
+      }
+      if (s_ozone < 0) {
+        s->l2_value = "--";
+      } else {
+        snprintf(s->buf2, sizeof(s->buf2), "%d", s_ozone);
+        s->l2_value = s->buf2;
       }
       break;
 
@@ -716,9 +799,11 @@ static void draw_template_single(GContext *ctx, GRect inner, int px, const TileS
   graphics_draw_text(ctx, s->icon, s_font_icon_tile, icon_r,
                      GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
 
-  // Borrows back the right padding the tile fill already covers.
+  // Borrows back the right padding the tile fill already covers, less a
+  // small inset so long ellipsised values don't run to the very edge.
   GRect val_r = GRect(inner.origin.x, inner.origin.y + VALUE_Y_OFFSET,
-                      inner.size.w + px, inner.size.h - VALUE_Y_OFFSET);
+                      inner.size.w + px - T1_VAL_RIGHT_INSET,
+                      inner.size.h - VALUE_Y_OFFSET);
   graphics_draw_text(ctx, s->value, s_font_sb, val_r,
                      GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
 }
@@ -1059,6 +1144,7 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
   if ((t = dict_find(iter, KEY_WIND_SPEED)))   { s_wind_speed = t->value->int32;   persist_write_int(PERSIST_WIND_SPEED, s_wind_speed); }
   if ((t = dict_find(iter, KEY_WIND_DIR)))     { s_wind_dir = t->value->int32;     persist_write_int(PERSIST_WIND_DIR, s_wind_dir); }
   if ((t = dict_find(iter, KEY_PRECIP_PROB)))  { s_precip_prob = t->value->int32;  persist_write_int(PERSIST_PRECIP_PROB, s_precip_prob); }
+  if ((t = dict_find(iter, KEY_OZONE)))        { s_ozone = t->value->int32;        persist_write_int(PERSIST_OZONE, s_ozone); }
 
   // Slot assignments, range-checked so a stale setting can't index past the
   // content table.
@@ -1179,6 +1265,7 @@ static void init(void) {
   if (persist_exists(PERSIST_WIND_SPEED))   s_wind_speed   = persist_read_int(PERSIST_WIND_SPEED);
   if (persist_exists(PERSIST_WIND_DIR))     s_wind_dir     = persist_read_int(PERSIST_WIND_DIR);
   if (persist_exists(PERSIST_PRECIP_PROB))  s_precip_prob  = persist_read_int(PERSIST_PRECIP_PROB);
+  if (persist_exists(PERSIST_OZONE))        s_ozone        = persist_read_int(PERSIST_OZONE);
   if (persist_exists(PERSIST_LOCATION))     persist_read_string(PERSIST_LOCATION, s_location, sizeof(s_location));
   {
     const uint32_t pk[3] = { PERSIST_TILE_A, PERSIST_TILE_B, PERSIST_TILE_C };
