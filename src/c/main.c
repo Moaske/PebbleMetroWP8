@@ -408,8 +408,8 @@ static const char *uv_classification(int uv_x10) {
   if (uv <= 2)  return "Low";
   if (uv <= 5)  return "Moderate";
   if (uv <= 7)  return "High";
-  if (uv <= 10) return "VHigh";
-  return "XHigh";
+  if (uv <= 10) return "Very High";
+  return "Extreme";
 }
 
 // ─── Week numbers ────────────────────────────────────────────────────────────
@@ -659,9 +659,9 @@ static void tile_spec_for(ContentId id, TileSpec *s) {
       s->title = "RAIN";
       s->icon  = (s_precip_prob > 10) ? ICON_PRECIP : ICON_PRECIP_DRY;
       if (s_precip_prob < 0) {
-        s->value = "1hr: --";
+        s->value = "1h: --";
       } else {
-        snprintf(s->buf1, sizeof(s->buf1), "1hr: %d%%", s_precip_prob);
+        snprintf(s->buf1, sizeof(s->buf1), "1h: %d%%", s_precip_prob);
         s->value = s->buf1;
       }
       break;
@@ -757,7 +757,7 @@ static void tile_spec_for(ContentId id, TileSpec *s) {
       if (s_uv_index_x10 < 0) {
         s->value = "--";
       } else {
-        snprintf(s->buf1, sizeof(s->buf1), "%d : %s",
+        snprintf(s->buf1, sizeof(s->buf1), "%d: %s",
                  s_uv_index_x10 / 10, uv_classification(s_uv_index_x10));
         s->value = s->buf1;
       }

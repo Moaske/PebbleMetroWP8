@@ -32,7 +32,14 @@ function wmoToIconIndex(code) {
   if (code === 2)                   return 2;  // partly cloudy
   if (code === 3)                   return 3;  // overcast
   if (code >= 45 && code <= 48)     return 4;  // fog
-  if (code >= 51 && code <= 57)     return 5;  // drizzle
+  if (code === 51 || code === 56)   return 5;  // light drizzle / light freezing drizzle
+  // 53 (moderate) and 55 (dense) drizzle get the RAIN icon rather than the
+  // drizzle one. The codes are accurate -- Open-Meteo derives them from a
+  // modelled precipitation rate -- but a steady spell of real rain often
+  // sits just under their rain threshold and comes back as 53, which then
+  // showed a drizzle icon while it was plainly raining outside. Dense
+  // drizzle reads as rain to anyone standing in it.
+  if (code === 53 || code === 55 || code === 57) return 6;  // moderate/dense drizzle
   if (code >= 61 && code <= 65)     return 6;  // rain
   if (code >= 80 && code <= 82)     return 7;  // heavy rain / showers
   if (code >= 66 && code <= 67)     return 8;  // freezing rain
