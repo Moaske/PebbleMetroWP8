@@ -77,7 +77,8 @@ module.exports = function(minified) {
     { t:"SUNSET",   dual:true,  l1i:"@", l1v:"07:14", l2i:"?", l2v:"20:03" },
     { t:"WIND",     dual:false, icon:"U", v:"12 km/h" },
     { t:"UV",       dual:false, icon:"7", v:"3 : Moderate" },
-    { t:"UV/SMOG",  dual:true,  l1i:"7", l1v:"3", l2i:"p", l2v:"68" }
+    { t:"UV/SMOG",  dual:true,  l1i:"7", l1v:"3", l2i:"p", l2v:"68" },
+    { t:"BATT",     dual:true,  l1i:"3", l1v:"96%", l2i:"4", l2v:"73%" }
   ];
 
   var previewHtml =
@@ -121,12 +122,6 @@ module.exports = function(minified) {
     '.mtprev-step-val { font-family:"Segoe UI",Arial,sans-serif; font-size:16px; font-weight:700; line-height:1; }' +
     '.mtprev-sleep-val { font-family:"Segoe UI",Arial,sans-serif; font-size:14px; font-weight:700; line-height:1; }' +
     '#mtprev-t-batt .mtprev-face { justify-content:space-between; }' +
-    '.mtprev-batt-row { display:flex; align-items:center; margin-top:4px; }' +
-    '.mtprev-batt-bar-h { flex:1; height:7px; background:rgba(255,255,255,0.25); border-radius:2px; overflow:hidden; }' +
-    '.mtprev-shell.mtprev-light .mtprev-batt-bar-h { background:rgba(0,0,0,0.15); }' +
-    '.mtprev-batt-fill-h { height:100%; background:rgba(255,255,255,0.85); border-radius:2px; }' +
-    '.mtprev-shell.mtprev-light .mtprev-batt-fill-h { background:rgba(0,0,0,0.85); }' +
-    '.mtprev-batt-pct { font-family:"Segoe UI",Arial,sans-serif; font-size:11px; font-weight:700; white-space:nowrap; }' +
     '.mtprev-icon { font-family:"MetroIcons"; font-size:20px; opacity:0.9; line-height:1; }' +
     '.mtprev-icon-sm { font-size:15px; opacity:0.85; line-height:1; }' +
     '.mtprev-nav-arrow { position:absolute; bottom:7px; right:9px; width:14px; height:14px; }' +
@@ -170,12 +165,8 @@ module.exports = function(minified) {
               '<div class="mtprev-tile-wrap sq mtprev-configurable" id="mtprev-t-sleep"><div class="mtprev-tile"><div class="mtprev-face">' +
                 '<div id="mtprev-face-c"></div>' +
               '</div></div></div>' +
-              '<div class="mtprev-tile-wrap sq" id="mtprev-t-batt"><div class="mtprev-tile"><div class="mtprev-face">' +
-                '<div class="mtprev-lbl">BATT</div>' +
-                '<div class="mtprev-batt-row">' +
-                  '<div class="mtprev-batt-bar-h"><div class="mtprev-batt-fill-h" style="width:80%"></div></div>' +
-                '</div>' +
-                '<div class="mtprev-batt-pct">80%</div>' +
+              '<div class="mtprev-tile-wrap sq mtprev-configurable" id="mtprev-t-batt"><div class="mtprev-tile"><div class="mtprev-face">' +
+                '<div id="mtprev-face-d"></div>' +
               '</div></div></div>' +
             '</div>' +
           '</div>' +
@@ -238,7 +229,8 @@ module.exports = function(minified) {
     var TILE_SLOTS = [
       { key:'tile_a_select', sfx:'a', dflt:0 },
       { key:'tile_b_select', sfx:'b', dflt:1 },
-      { key:'tile_c_select', sfx:'c', dflt:2 }
+      { key:'tile_c_select', sfx:'c', dflt:2 },
+      { key:'tile_d_select', sfx:'d', dflt:12 }
     ];
 
     function esc(s) {

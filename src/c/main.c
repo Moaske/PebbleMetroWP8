@@ -58,12 +58,6 @@
   #define DATE_DM_Y_OFFSET    30
   #define DATE_DM_H           24
 
-  #define BATT_TEXT_Y_OFFSET  18
-  #define BATT_TEXT_H         10
-  #define BATT_BAR_H          3
-  #define BATT_GAP_TEXT_BAR   4
-  #define BATT_GAP_BAR_TEXT   2
-  #define BATT_ICON_COL_W     14
 
 #elif defined(PBL_PLATFORM_BASALT)
   #define SCREEN_W        144
@@ -104,12 +98,6 @@
   #define DATE_DM_Y_OFFSET    22
   #define DATE_DM_H           17
 
-  #define BATT_TEXT_Y_OFFSET  13
-  #define BATT_TEXT_H         7
-  #define BATT_BAR_H          2
-  #define BATT_GAP_TEXT_BAR   3
-  #define BATT_GAP_BAR_TEXT   1
-  #define BATT_ICON_COL_W     10
 #endif
 
 #define ROW1_Y          0
@@ -146,6 +134,7 @@
 #define KEY_TILE_A       MESSAGE_KEY_TILE_A
 #define KEY_TILE_B       MESSAGE_KEY_TILE_B
 #define KEY_TILE_C       MESSAGE_KEY_TILE_C
+#define KEY_TILE_D       MESSAGE_KEY_TILE_D
 #define KEY_WEEK_START   MESSAGE_KEY_WEEK_START   // 0 = Sunday, 1 = Monday
 #define KEY_WEEK_REF_DN  MESSAGE_KEY_WEEK_REF_DN  // offset-week start, days since 1970-01-01
 #define KEY_WIND_UNIT    MESSAGE_KEY_WIND_UNIT     // 0 = km/h, 1 = mph
@@ -179,6 +168,7 @@
 #define PERSIST_TILE_A       118
 #define PERSIST_TILE_B       119
 #define PERSIST_TILE_C       120
+#define PERSIST_TILE_D       126
 #define PERSIST_WEEK_START   121
 #define PERSIST_WEEK_REF_DN  122
 #define PERSIST_HRM_LAST     123
@@ -338,10 +328,11 @@ typedef enum {
   CONTENT_WIND,
   CONTENT_UV,
   CONTENT_UV_SMOG,
+  CONTENT_BATTERY,
   CONTENT_COUNT
 } ContentId;
 
-static ContentId s_slot[3] = { CONTENT_AQI, CONTENT_STEPS, CONTENT_SLEEP };
+static ContentId s_slot[4] = { CONTENT_AQI, CONTENT_STEPS, CONTENT_SLEEP, CONTENT_BATTERY };
 
 // ─── Moon phase ──────────────────────────────────────────────────────────────
 // Computed on-watch. Open-Meteo's `daily=moon_phase` only appears in a
@@ -782,6 +773,26 @@ static void tile_spec_for(ContentId id, TileSpec *s) {
       }
       break;
 
+    case CONTENT_BATTERY: {
+      BatteryChargeState bat = battery_state_service_peek();
+      s->title   = "BATT";
+      s->dual    = true;
+      s->l1_icon = ICON_WATCH;
+      s->l2_icon = ICON_PHONE;
+      snprintf(s->buf1, sizeof(s->buf1), "%d%%", bat.charge_percent);
+      s->l1_value = s->buf1;
+      // Phone side: "--" until it has ever reported, "CHRG" while plugged in.
+      if (s_phone_battery < 0) {
+        s->l2_value = "--";
+      } else if (s_phone_charging) {
+        s->l2_value = "CHR";
+      } else {
+        snprintf(s->buf2, sizeof(s->buf2), "%d%%", s_phone_battery);
+        s->l2_value = s->buf2;
+      }
+      break;
+    }
+
     default:
       s->title = "";
       break;
@@ -891,8 +902,11 @@ static void draw_tile_content(GContext *ctx, TileId id, GRect r) {
     // The three configurable slots.
     case TILE_AQI:
     case TILE_STEPS:
-    case TILE_SLEEP: {
-      int slot = (id == TILE_AQI) ? 0 : (id == TILE_STEPS) ? 1 : 2;
+    case TILE_SLEEP:
+    case TILE_BATTERY: {
+      int slot = (id == TILE_AQI)   ? 0
+               : (id == TILE_STEPS) ? 1
+               : (id == TILE_SLEEP) ? 2 : 3;
       TileSpec spec;
       tile_spec_for(s_slot[slot], &spec);
       if (spec.dual) draw_template_dual(ctx, inner, px, &spec);
@@ -927,63 +941,6 @@ static void draw_tile_content(GContext *ctx, TileId id, GRect r) {
                          inner.size.h - (top + WEATHER_HL_Y_OFFSET - inner.origin.y));
       graphics_draw_text(ctx, buf, s_font_sm, hl_r,
                          GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
-      break;
-    }
-
-    case TILE_BATTERY: {
-      BatteryChargeState bat = battery_state_service_peek();
-      int watch_pct = bat.charge_percent;
-      GRect lbl_r = GRect(inner.origin.x, inner.origin.y, inner.size.w, LABEL_H);
-      graphics_draw_text(ctx, "BATT", s_font_sm, lbl_r,
-                         GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
-
-      int text_h = BATT_TEXT_H, bar_h = BATT_BAR_H, bar_w = inner.size.w;
-      int watch_text_y = inner.origin.y + BATT_TEXT_Y_OFFSET;
-      int watch_bar_y  = watch_text_y + text_h + BATT_GAP_TEXT_BAR;
-      int phone_text_y = watch_bar_y + bar_h + BATT_GAP_BAR_TEXT;
-      int phone_bar_y  = phone_text_y + text_h + BATT_GAP_TEXT_BAR;
-      GColor track_col = s_theme_light ? GColorFromRGB(200,200,200) : GColorFromRGB(90,90,90);
-      int icon_col_w = BATT_ICON_COL_W;
-
-      GRect w_icon_r = GRect(inner.origin.x, watch_text_y - 1, icon_col_w, text_h + 2);
-      graphics_draw_text(ctx, ICON_WATCH, s_font_icons_mini, w_icon_r,
-                         GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
-      snprintf(buf, sizeof(buf), "%d%%", watch_pct);
-      GRect w_txt_r = GRect(inner.origin.x + icon_col_w, watch_text_y,
-                            inner.size.w - icon_col_w, text_h);
-      graphics_draw_text(ctx, buf, s_font_sm, w_txt_r,
-                         GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
-      graphics_context_set_fill_color(ctx, track_col);
-      graphics_fill_rect(ctx, GRect(inner.origin.x, watch_bar_y, bar_w, bar_h), 2, GCornersAll);
-      graphics_context_set_fill_color(ctx, fg);
-      graphics_fill_rect(ctx, GRect(inner.origin.x, watch_bar_y,
-                                    (bar_w * watch_pct) / 100, bar_h), 2, GCornersAll);
-
-      // Phone side: "--" until the phone has ever reported, "CHRG" while
-      // plugged in. The bar tracks real charge either way.
-      GRect p_icon_r = GRect(inner.origin.x, phone_text_y - 1, icon_col_w, text_h + 2);
-      graphics_draw_text(ctx, ICON_PHONE, s_font_icons_mini, p_icon_r,
-                         GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
-      GRect p_txt_r = GRect(inner.origin.x + icon_col_w, phone_text_y,
-                            inner.size.w - icon_col_w, text_h);
-      if (s_phone_battery < 0) {
-        graphics_draw_text(ctx, "--", s_font_sm, p_txt_r,
-                           GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
-      } else if (s_phone_charging) {
-        graphics_draw_text(ctx, "CHRG", s_font_sm, p_txt_r,
-                           GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
-      } else {
-        snprintf(buf, sizeof(buf), "%d%%", s_phone_battery);
-        graphics_draw_text(ctx, buf, s_font_sm, p_txt_r,
-                           GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
-      }
-      graphics_context_set_fill_color(ctx, track_col);
-      graphics_fill_rect(ctx, GRect(inner.origin.x, phone_bar_y, bar_w, bar_h), 2, GCornersAll);
-      if (s_phone_battery >= 0) {
-        graphics_context_set_fill_color(ctx, fg);
-        graphics_fill_rect(ctx, GRect(inner.origin.x, phone_bar_y,
-                                      (bar_w * s_phone_battery) / 100, bar_h), 2, GCornersAll);
-      }
       break;
     }
 
@@ -1149,9 +1106,9 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
   // Slot assignments, range-checked so a stale setting can't index past the
   // content table.
   {
-    const uint32_t slot_keys[3]    = { KEY_TILE_A, KEY_TILE_B, KEY_TILE_C };
-    const uint32_t persist_keys[3] = { PERSIST_TILE_A, PERSIST_TILE_B, PERSIST_TILE_C };
-    for (int i = 0; i < 3; i++) {
+    const uint32_t slot_keys[4]    = { KEY_TILE_A, KEY_TILE_B, KEY_TILE_C, KEY_TILE_D };
+    const uint32_t persist_keys[4] = { PERSIST_TILE_A, PERSIST_TILE_B, PERSIST_TILE_C, PERSIST_TILE_D };
+    for (int i = 0; i < 4; i++) {
       if ((t = dict_find(iter, slot_keys[i]))) {
         int v = t->value->int32;
         if (v >= 0 && v < CONTENT_COUNT) {
@@ -1268,8 +1225,8 @@ static void init(void) {
   if (persist_exists(PERSIST_OZONE))        s_ozone        = persist_read_int(PERSIST_OZONE);
   if (persist_exists(PERSIST_LOCATION))     persist_read_string(PERSIST_LOCATION, s_location, sizeof(s_location));
   {
-    const uint32_t pk[3] = { PERSIST_TILE_A, PERSIST_TILE_B, PERSIST_TILE_C };
-    for (int i = 0; i < 3; i++) {
+    const uint32_t pk[4] = { PERSIST_TILE_A, PERSIST_TILE_B, PERSIST_TILE_C, PERSIST_TILE_D };
+    for (int i = 0; i < 4; i++) {
       if (persist_exists(pk[i])) {
         int v = persist_read_int(pk[i]);
         if (v >= 0 && v < CONTENT_COUNT) s_slot[i] = (ContentId)v;

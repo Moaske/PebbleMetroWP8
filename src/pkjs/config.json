@@ -173,6 +173,10 @@
           {
             "label": "UV / Smog",
             "value": "11"
+          },
+          {
+            "label": "Battery",
+            "value": "12"
           }
         ]
       },
@@ -229,6 +233,10 @@
           {
             "label": "UV / Smog",
             "value": "11"
+          },
+          {
+            "label": "Battery",
+            "value": "12"
           }
         ]
       },
@@ -285,6 +293,70 @@
           {
             "label": "UV / Smog",
             "value": "11"
+          },
+          {
+            "label": "Battery",
+            "value": "12"
+          }
+        ]
+      },
+      {
+        "type": "select",
+        "messageKey": "tile_d_select",
+        "label": "Bottom row-right tile",
+        "defaultValue": "12",
+        "options": [
+          {
+            "label": "Air quality",
+            "value": "0"
+          },
+          {
+            "label": "Steps",
+            "value": "1"
+          },
+          {
+            "label": "Sleep",
+            "value": "2"
+          },
+          {
+            "label": "Moon phase",
+            "value": "3"
+          },
+          {
+            "label": "Rain",
+            "value": "4"
+          },
+          {
+            "label": "Heart rate",
+            "value": "5"
+          },
+          {
+            "label": "Calories",
+            "value": "6"
+          },
+          {
+            "label": "Week numbers",
+            "value": "7"
+          },
+          {
+            "label": "Sunrise/sunset",
+            "value": "8"
+          },
+          {
+            "label": "Wind",
+            "value": "9"
+          },
+          {
+            "label": "UV index",
+            "value": "10"
+          },
+          {
+            "label": "UV / Smog",
+            "value": "11"
+          },
+          {
+            "label": "Battery",
+            "value": "12"
           }
         ]
       }

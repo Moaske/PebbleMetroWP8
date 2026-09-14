@@ -52,7 +52,9 @@
             "week_ref_date",
             "WIND_UNIT",
             "wind_unit_select",
-            "OZONE"
+            "OZONE",
+            "TILE_D",
+            "tile_d_select"
         ],
         "projectType": "native",
         "resources": {
@@ -238,5 +240,5 @@
             "watchface": true
         }
     },
-    "version": "1.5.3"
+    "version": "1.6.0"
 }
