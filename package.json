@@ -139,7 +139,7 @@
                     "type": "font"
                 },
                 {
-                    "characterRegex": "[a-pA-Z0-9:;<=>?@]",
+                    "characterRegex": "[a-o]",
                     "file": "fonts/MetroIcons.ttf",
                     "name": "FONT_ICONS_36",
                     "targetPlatforms": [
@@ -148,7 +148,7 @@
                     "type": "font"
                 },
                 {
-                    "characterRegex": "[a-pA-Z0-9:;<=>?@]",
+                    "characterRegex": "[a-qA-Z0-9:;<=>?@]",
                     "file": "fonts/MetroIcons.ttf",
                     "name": "FONT_ICONS_28",
                     "targetPlatforms": [
@@ -157,7 +157,7 @@
                     "type": "font"
                 },
                 {
-                    "characterRegex": "[a-pA-Z0-9:;<=>?@]",
+                    "characterRegex": "[a-o]",
                     "file": "fonts/MetroIcons.ttf",
                     "name": "FONT_ICONS_26",
                     "targetPlatforms": [
@@ -166,7 +166,7 @@
                     "type": "font"
                 },
                 {
-                    "characterRegex": "[a-pA-Z0-9:;<=>?@]",
+                    "characterRegex": "[a-qA-Z0-9:;<=>?@]",
                     "file": "fonts/MetroIcons.ttf",
                     "name": "FONT_ICONS_20",
                     "targetPlatforms": [
@@ -175,7 +175,7 @@
                     "type": "font"
                 },
                 {
-                    "characterRegex": "[a-pA-Z0-9:;<=>?@]",
+                    "characterRegex": "[=]",
                     "file": "fonts/MetroIcons.ttf",
                     "name": "FONT_ICONS_24",
                     "targetPlatforms": [
@@ -184,7 +184,7 @@
                     "type": "font"
                 },
                 {
-                    "characterRegex": "[a-pA-Z0-9:;<=>?@]",
+                    "characterRegex": "[=]",
                     "file": "fonts/MetroIcons.ttf",
                     "name": "FONT_ICONS_17",
                     "targetPlatforms": [
@@ -193,25 +193,7 @@
                     "type": "font"
                 },
                 {
-                    "characterRegex": "[a-pA-Z0-9:;<=>?@]",
-                    "file": "fonts/MetroIcons.ttf",
-                    "name": "FONT_ICONS_12",
-                    "targetPlatforms": [
-                        "emery"
-                    ],
-                    "type": "font"
-                },
-                {
-                    "characterRegex": "[a-pA-Z0-9:;<=>?@]",
-                    "file": "fonts/MetroIcons.ttf",
-                    "name": "FONT_ICONS_10",
-                    "targetPlatforms": [
-                        "basalt"
-                    ],
-                    "type": "font"
-                },
-                {
-                    "characterRegex": "[a-pA-Z0-9:;<=>?@]",
+                    "characterRegex": "[a-qA-Z0-9:;<=>?@]",
                     "file": "fonts/MetroIcons.ttf",
                     "name": "FONT_ICONS_18",
                     "targetPlatforms": [
@@ -220,7 +202,7 @@
                     "type": "font"
                 },
                 {
-                    "characterRegex": "[a-pA-Z0-9:;<=>?@]",
+                    "characterRegex": "[a-qA-Z0-9:;<=>?@]",
                     "file": "fonts/MetroIcons.ttf",
                     "name": "FONT_ICONS_13",
                     "targetPlatforms": [
@@ -240,5 +222,5 @@
             "watchface": true
         }
     },
-    "version": "1.6.0"
+    "version": "1.6.1"
 }

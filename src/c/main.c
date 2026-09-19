@@ -5,9 +5,13 @@
 // Time Steel, 144x168). Both are full-colour (2-bit/channel, 64 colours) —
 // Basalt is purely a resolution difference, not a colour-depth one.
 //
-//   Row 1: 95 (time) + 3 (gap) + 46 (date)                            = 144
-//   Row 2: 46 (slot) + 3 (gap) + 95 (weather)                          = 144
-//   Row 3: 46 (slot) + 3 + 46 (slot) + 3 + 46 (battery)                = 144
+// Basalt row arithmetic (Emery is the same shape at 64/132/200):
+//   Row 1: 95 (time)   + 3 (gap) + 46 (date)                          = 144
+//   Row 2: 46 (slot A) + 3 (gap) + 95 (weather)                       = 144
+//   Row 3: 46 (slot B) + 3 + 46 (slot C) + 3 + 46 (slot D)            = 144
+//
+// Slots A-D are the four user-configurable squares; each draws whichever
+// ContentId s_slot[] holds for it, so they carry no fixed meaning.
 #if defined(PBL_PLATFORM_EMERY)
   #define SCREEN_W        200
   #define SCREEN_H        228
@@ -174,6 +178,11 @@
 #define PERSIST_HRM_LAST     123
 #define PERSIST_WIND_UNIT    124
 #define PERSIST_OZONE        125
+#define PERSIST_HR_DAY       127   // start-of-day the average accumulator covers
+#define PERSIST_HR_SUM       128
+#define PERSIST_HR_COUNT     129
+#define PERSIST_HR_SCANNED   130   // first minute not yet folded into the average
+#define PERSIST_HR_REST      131
 
 #define FLIP_DURATION_MS   200
 #define FLIP_DELAY_MS      1000
@@ -210,6 +219,13 @@ static long s_week_ref_dn  = -1;   // offset-week start date, -1 = not configure
 // error. Cache the last good value (persisted) so the tile keeps showing the
 // most recent real measurement instead of blinking to "--" between samples.
 static int  s_hrm_last     = -1;
+// Today's average and the overnight resting rate; see the heart-rate section
+// below for how each is derived.
+static int32_t s_hr_sum     = 0;
+static int32_t s_hr_count   = 0;
+static time_t  s_hr_day     = 0;   // start-of-day the accumulator belongs to
+static time_t  s_hr_scanned = 0;   // first minute not yet folded into the sum
+static int     s_hr_rest    = -1;  // resting BPM, -1 = never had enough data
 static char s_location[32] = "";
 static int  s_phone_battery = -1;
 static bool s_phone_charging = false;
@@ -219,8 +235,8 @@ static int  s_sleep_h = 0;
 static int  s_sleep_m = 0;
 
 typedef enum {
-  TILE_TIME = 0, TILE_DATE, TILE_AQI, TILE_WEATHER,
-  TILE_STEPS, TILE_SLEEP, TILE_BATTERY, TILE_COUNT
+  TILE_TIME = 0, TILE_DATE, TILE_SLOT_A, TILE_WEATHER,
+  TILE_SLOT_B, TILE_SLOT_C, TILE_SLOT_D, TILE_COUNT
 } TileId;
 
 static bool      s_tile_flipping[TILE_COUNT];
@@ -283,6 +299,7 @@ static const char *weather_icon_for(int idx) {
 #define ICON_UV_ALERT   "Y"   // sun with alert - high UV
 #define ICON_ALERT      "Z"   // octagram - poor air quality / high ozone
 #define ICON_SMOG       "p"
+#define ICON_HAND_HEART "q"   // resting heart rate (mdi hand-heart)
 
 static const char *MOON_ICONS[] = { "A","B","C","D","E","F","G","H" };
 
@@ -315,13 +332,18 @@ static const char *const *locale_weekdays(void) {
 }
 
 // ─── Configurable tile content ───────────────────────────────────────────────
+// The numeric values are persisted and are also the values the Clay selects
+// send, so existing entries must keep their IDs -- new content types are only
+// ever APPENDED. CONTENT_HR_AVG keeps slot 5, which used to be the last-sample
+// heart rate tile: anyone who had that selected now gets today's average,
+// which is the intended upgrade rather than a silent reset to AQI.
 typedef enum {
   CONTENT_AQI = 0,
   CONTENT_STEPS,
   CONTENT_SLEEP,
   CONTENT_MOONPHASE,
   CONTENT_RAIN,
-  CONTENT_HRM,
+  CONTENT_HR_AVG,      // 5  (was the last-sample HRM tile)
   CONTENT_CALORIES,
   CONTENT_WEEKNR,
   CONTENT_SUNSET,
@@ -329,6 +351,8 @@ typedef enum {
   CONTENT_UV,
   CONTENT_UV_SMOG,
   CONTENT_BATTERY,
+  CONTENT_HR_REST,     // 13
+  CONTENT_HR_DUAL,     // 14 - current sample over resting
   CONTENT_COUNT
 } ContentId;
 
@@ -385,7 +409,7 @@ static const char *MOON_NAMES[] = {
 #define UV_ALERT_THRESHOLD     5    // UV index at/above which the sun icon gains an alert
 #define OZONE_ALERT_THRESHOLD  100  // ug/m3
 #define AQI_ALERT_THRESHOLD    60   // European AQI 60+ is "Poor" or worse
-#define WIND_SOCK_THRESHOLD    40   // km/h at/above which the arrow becomes a windsock
+#define WIND_SOCK_THRESHOLD    30   // km/h at/above which the arrow becomes a windsock
 
 // ─── UV classification (WHO bands) ───────────────────────────────────────────
 // Shared by both UV tiles so their icon rule can't drift apart.
@@ -480,11 +504,11 @@ static GRect tile_rect(TileId id) {
   switch (id) {
     case TILE_TIME:    return GRect(COL1_X, ROW1_Y, TILE_DBL, TILE_SQ);
     case TILE_DATE:    return GRect(COL3_X, ROW1_Y, TILE_SQ,  TILE_SQ);
-    case TILE_AQI:     return GRect(COL1_X, ROW2_Y, TILE_SQ,  TILE_SQ);
+    case TILE_SLOT_A:  return GRect(COL1_X, ROW2_Y, TILE_SQ,  TILE_SQ);
     case TILE_WEATHER: return GRect(COL2_X, ROW2_Y, TILE_DBL, TILE_SQ);
-    case TILE_STEPS:   return GRect(COL1_X, ROW3_Y, TILE_SQ,  TILE_SQ);
-    case TILE_SLEEP:   return GRect(COL2_X, ROW3_Y, TILE_SQ,  TILE_SQ);
-    case TILE_BATTERY: return GRect(COL3_X, ROW3_Y, TILE_SQ,  TILE_SQ);
+    case TILE_SLOT_B:  return GRect(COL1_X, ROW3_Y, TILE_SQ,  TILE_SQ);
+    case TILE_SLOT_C:  return GRect(COL2_X, ROW3_Y, TILE_SQ,  TILE_SQ);
+    case TILE_SLOT_D:  return GRect(COL3_X, ROW3_Y, TILE_SQ,  TILE_SQ);
     default:           return GRect(0, 0, 0, 0);
   }
 }
@@ -528,6 +552,164 @@ static void update_hrm_data(void) {
 #endif
 }
 
+// ─── Average and resting heart rate ──────────────────────────────────────────
+// Both mirror what the Pebble companion app shows, so the tiles and the phone
+// agree. The app is open source (coredevices/mobileapp, libpebble3), and both
+// figures there are derived from the same per-minute history the watch itself
+// records -- which health_service_get_minute_history() hands us directly, so
+// no phone round-trip is involved.
+//
+// Emery only: Basalt has no optical sensor, and HealthMinuteData.heart_rate_bpm
+// is simply always zero there.
+#if defined(PBL_PLATFORM_EMERY)
+
+// Records fetched per health_service_get_minute_history() call. A whole day is
+// 1440 minutes; pulling them in chunks keeps the buffer off the heap (~12
+// bytes per record) instead of allocating 17 KB in one go.
+#define HR_MINUTE_CHUNK 60
+
+// From libpebble3 Health.kt / HealthConstants.kt.
+#define REST_HR_MIN_READINGS    10   // fewer qualifying minutes -> no figure
+#define REST_HR_LOWEST_MINUTES  5    // average of the N lowest
+#define SLEEP_WINDOW_BEFORE_SEC (6  * SECONDS_PER_HOUR)   // 6 PM yesterday
+#define SLEEP_WINDOW_AFTER_SEC  (14 * SECONDS_PER_HOUR)   // 2 PM today
+
+// ── Average ──
+// The companion app's query is:
+//   SELECT AVG(heartRate) FROM health_data
+//    WHERE timestamp >= dayStart AND timestamp < dayEnd AND heartRate > 0
+// -- the plain mean of every non-zero per-minute reading recorded today.
+//
+// Re-reading all 1440 minutes on every health event would be far too costly
+// for a watchface, so the sum and count accumulate incrementally: each pass
+// reads only the minutes since the last one stopped. Both persist, so a
+// restart part-way through the day resumes rather than throwing away the
+// morning's readings.
+static void update_hr_average(void) {
+  time_t day = time_start_of_today();
+  if (day != s_hr_day) {           // new day, or first run: start clean
+    s_hr_day = day; s_hr_sum = 0; s_hr_count = 0; s_hr_scanned = day;
+  }
+
+  time_t now = time(NULL);
+  if (s_hr_scanned >= now) return;
+
+  HealthMinuteData rec[HR_MINUTE_CHUNK];
+  time_t before = s_hr_scanned;
+
+  // Bounded so a long gap (watch off the wrist, app reinstalled) can't spin
+  // here indefinitely. 32 chunks covers more than a full day.
+  for (int pass = 0; pass < 32 && s_hr_scanned < now; pass++) {
+    time_t from = s_hr_scanned, to = now;
+    uint32_t n = health_service_get_minute_history(rec, HR_MINUTE_CHUNK, &from, &to);
+    // Zero records, or a window that didn't advance, means there is nothing
+    // further recorded yet -- including the current, still-incomplete minute.
+    if (n == 0 || to <= s_hr_scanned) break;
+    for (uint32_t i = 0; i < n; i++) {
+      if (!rec[i].is_invalid && rec[i].heart_rate_bpm > 0) {
+        s_hr_sum += rec[i].heart_rate_bpm;
+        s_hr_count++;
+      }
+    }
+    s_hr_scanned = to;
+  }
+
+  if (s_hr_scanned != before) {    // only touch flash when something moved
+    persist_write_int(PERSIST_HR_DAY,     (int32_t)s_hr_day);
+    persist_write_int(PERSIST_HR_SUM,     s_hr_sum);
+    persist_write_int(PERSIST_HR_COUNT,   s_hr_count);
+    persist_write_int(PERSIST_HR_SCANNED, (int32_t)s_hr_scanned);
+  }
+}
+
+static int hr_average(void) {
+  if (s_hr_count <= 0) return -1;
+  return (int)((s_hr_sum + s_hr_count / 2) / s_hr_count);   // round half up
+}
+
+// ── Resting ──
+// Keeps only the N lowest readings seen plus a running total, so the whole
+// scan needs a handful of ints rather than a list of every sleeping minute.
+typedef struct {
+  int lowest[REST_HR_LOWEST_MINUTES];   // ascending
+  int n;                                // entries used in lowest[]
+  int total;                            // every qualifying reading seen
+} RestHrAccum;
+
+static void rest_hr_add(RestHrAccum *a, int bpm) {
+  a->total++;
+  int i;
+  if (a->n < REST_HR_LOWEST_MINUTES) {
+    i = a->n++;
+  } else {
+    if (bpm >= a->lowest[REST_HR_LOWEST_MINUTES - 1]) return;
+    i = REST_HR_LOWEST_MINUTES - 1;
+  }
+  for (; i > 0 && a->lowest[i - 1] > bpm; i--) a->lowest[i] = a->lowest[i - 1];
+  a->lowest[i] = bpm;
+}
+
+static void rest_hr_scan_range(RestHrAccum *a, time_t from, time_t to) {
+  HealthMinuteData rec[HR_MINUTE_CHUNK];
+  for (int pass = 0; pass < 24 && from < to; pass++) {   // 24 h max per interval
+    time_t s = from, e = to;
+    uint32_t n = health_service_get_minute_history(rec, HR_MINUTE_CHUNK, &s, &e);
+    if (n == 0 || e <= from) break;
+    for (uint32_t i = 0; i < n; i++) {
+      if (!rec[i].is_invalid && rec[i].heart_rate_bpm > 0) {
+        rest_hr_add(a, rec[i].heart_rate_bpm);
+      }
+    }
+    from = e;
+  }
+}
+
+// HealthActivitySleep is the light-sleep CONTAINER; HealthActivityRestfulSleep
+// marks the deep stretches nested inside it. Iterating the container alone is
+// what the companion app's `filterNot { it.isDeep }` amounts to, and it avoids
+// counting the deep minutes twice.
+static bool sleep_interval_cb(HealthActivity activity, time_t time_start,
+                              time_t time_end, void *context) {
+  if (activity == HealthActivitySleep) {
+    rest_hr_scan_range((RestHrAccum *)context, time_start, time_end);
+  }
+  return true;   // keep iterating
+}
+
+// Average of the REST_HR_LOWEST_MINUTES lowest readings taken during last
+// night's sleep. Below REST_HR_MIN_READINGS qualifying minutes the companion
+// app returns nothing rather than a figure drawn from too little data; here
+// that means the previously computed value simply stays on screen.
+static void update_hr_resting(void) {
+  time_t day = time_start_of_today();
+  time_t search_start = day - SLEEP_WINDOW_BEFORE_SEC;
+  time_t search_end   = day + SLEEP_WINDOW_AFTER_SEC;
+  time_t now = time(NULL);
+  if (search_end > now) search_end = now;
+  if (search_end <= search_start) return;
+
+  RestHrAccum a;
+  memset(&a, 0, sizeof(a));
+  health_service_activities_iterate(HealthActivitySleep, search_start, search_end,
+                                    HealthIterationDirectionPast,
+                                    sleep_interval_cb, &a);
+
+  if (a.total < REST_HR_MIN_READINGS || a.n <= 0) return;
+  int sum = 0;
+  for (int i = 0; i < a.n; i++) sum += a.lowest[i];
+  s_hr_rest = (sum + a.n / 2) / a.n;                      // round half up
+  persist_write_int(PERSIST_HR_REST, s_hr_rest);
+}
+
+#else
+// Basalt: no optical heart rate sensor. The two updaters are called
+// unconditionally from the health/wake handlers, so they need no-op stand-ins;
+// hr_average() deliberately gets none, because its only call site is itself
+// Emery-only and an unused static here would warn at build time.
+static void update_hr_average(void) {}
+static void update_hr_resting(void) {}
+#endif
+
 // ─── Fonts ───────────────────────────────────────────────────────────────────
 static GFont s_font_time;
 static GFont s_font_med;
@@ -536,7 +718,6 @@ static GFont s_font_sb;          // semibold, unified tile value font
 static GFont s_font_weather;     // MetroIcons, weather-tile size
 static GFont s_font_icon_tile;   // MetroIcons, tile-centre size
 static GFont s_font_icon_arrow;  // MetroIcons, nav-arrow size
-static GFont s_font_icons_mini;  // MetroIcons, battery-row size
 static GFont s_font_icon_t2;     // MetroIcons, template-2 row size
 
 static GColor theme_fg(void) { return s_theme_light ? GColorBlack : GColorWhite; }
@@ -648,7 +829,7 @@ static void tile_spec_for(ContentId id, TileSpec *s) {
 
     case CONTENT_RAIN:
       s->title = "RAIN";
-      s->icon  = (s_precip_prob > 10) ? ICON_PRECIP : ICON_PRECIP_DRY;
+      s->icon  = (s_precip_prob > 20) ? ICON_PRECIP : ICON_PRECIP_DRY;
       if (s_precip_prob < 0) {
         s->value = "1h: --";
       } else {
@@ -657,18 +838,63 @@ static void tile_spec_for(ContentId id, TileSpec *s) {
       }
       break;
 
-    case CONTENT_HRM:
-      s->title = "HRM";
+    case CONTENT_HR_AVG:
+      s->title = "AVG HR";
       s->icon  = ICON_HEART;
 #if defined(PBL_PLATFORM_EMERY)
-      if (s_hrm_last > 0) {
-        snprintf(s->buf1, sizeof(s->buf1), "%d bpm", s_hrm_last);
-        s->value = s->buf1;
-      } else {
-        s->value = "-- bpm";
+      {
+        int avg = hr_average();
+        if (avg > 0) {
+          snprintf(s->buf1, sizeof(s->buf1), "%d bpm", avg);
+          s->value = s->buf1;
+        } else {
+          s->value = "-- bpm";
+        }
       }
 #else
       s->value = "n/a";   // Basalt has no optical heart rate sensor
+#endif
+      break;
+
+    case CONTENT_HR_REST:
+      s->title = "RHR";
+      s->icon  = ICON_HAND_HEART;
+#if defined(PBL_PLATFORM_EMERY)
+      if (s_hr_rest > 0) {
+        snprintf(s->buf1, sizeof(s->buf1), "%d bpm", s_hr_rest);
+        s->value = s->buf1;
+      } else {
+        s->value = "-- bpm";   // not enough sleeping minutes recorded yet
+      }
+#else
+      s->value = "n/a";
+#endif
+      break;
+
+    case CONTENT_HR_DUAL:
+      // No "bpm" suffix: template 2 leaves 37px for the value on Emery (27px
+      // on Basalt), which "74 bpm" overruns and would ellipsise. The two heart
+      // glyphs already say what the numbers are.
+      s->title   = "HRM";
+      s->dual    = true;
+      s->l1_icon = ICON_HEART;
+      s->l2_icon = ICON_HAND_HEART;
+#if defined(PBL_PLATFORM_EMERY)
+      if (s_hrm_last > 0) {
+        snprintf(s->buf1, sizeof(s->buf1), "%d", s_hrm_last);
+        s->l1_value = s->buf1;
+      } else {
+        s->l1_value = "--";
+      }
+      if (s_hr_rest > 0) {
+        snprintf(s->buf2, sizeof(s->buf2), "%d", s_hr_rest);
+        s->l2_value = s->buf2;
+      } else {
+        s->l2_value = "--";
+      }
+#else
+      s->l1_value = "n/a";
+      s->l2_value = "n/a";
 #endif
       break;
 
@@ -717,7 +943,7 @@ static void tile_spec_for(ContentId id, TileSpec *s) {
     }
 
     case CONTENT_SUNSET:
-      s->title    = "SUNSET";
+      s->title    = "SUN";
       s->dual     = true;
       s->l1_icon  = ICON_SUNRISE;
       s->l2_icon  = ICON_SUNSET;
@@ -899,14 +1125,15 @@ static void draw_tile_content(GContext *ctx, TileId id, GRect r) {
       break;
     }
 
-    // The three configurable slots.
-    case TILE_AQI:
-    case TILE_STEPS:
-    case TILE_SLEEP:
-    case TILE_BATTERY: {
-      int slot = (id == TILE_AQI)   ? 0
-               : (id == TILE_STEPS) ? 1
-               : (id == TILE_SLEEP) ? 2 : 3;
+    // The four configurable slots. Which content each draws comes from
+    // s_slot[], so these identify a POSITION on screen, nothing more.
+    case TILE_SLOT_A:
+    case TILE_SLOT_B:
+    case TILE_SLOT_C:
+    case TILE_SLOT_D: {
+      int slot = (id == TILE_SLOT_A) ? 0
+               : (id == TILE_SLOT_B) ? 1
+               : (id == TILE_SLOT_C) ? 2 : 3;
       TileSpec spec;
       tile_spec_for(s_slot[slot], &spec);
       if (spec.dual) draw_template_dual(ctx, inner, px, &spec);
@@ -1027,6 +1254,8 @@ static void light_poll_callback(void *context) {
     update_steps_data();
     update_sleep_data();
     update_hrm_data();
+    update_hr_average();   // incremental: only reads minutes recorded since
+                           // the last pass, so this stays cheap on every wake
     trigger_wakeup_flips();
   }
   s_light_was_on = now_on;
@@ -1041,6 +1270,7 @@ static void accel_tap_handler(AccelAxisType axis, int32_t direction) {
   update_steps_data();
   update_sleep_data();
   update_hrm_data();
+  update_hr_average();
   trigger_wakeup_flips();
 }
 
@@ -1132,13 +1362,25 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
 
 static void health_handler(HealthEventType event, void *context) {
   switch (event) {
-    case HealthEventMovementUpdate:  update_steps_data(); break;
-    case HealthEventSleepUpdate:     update_sleep_data(); break;
-    case HealthEventHeartRateUpdate: update_hrm_data();   break;
+    case HealthEventMovementUpdate:
+      update_steps_data();
+      break;
+    case HealthEventSleepUpdate:
+      update_sleep_data();
+      // Last night's sleep intervals are what the resting figure is measured
+      // over, so this is the only event that can change it.
+      update_hr_resting();
+      break;
+    case HealthEventHeartRateUpdate:
+      update_hrm_data();
+      update_hr_average();
+      break;
     case HealthEventSignificantUpdate:
       update_steps_data();
       update_sleep_data();
       update_hrm_data();
+      update_hr_average();
+      update_hr_resting();
       break;
     default: break;
   }
@@ -1158,7 +1400,6 @@ static void window_load(Window *window) {
   s_font_weather    = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ICONS_36));
   s_font_icon_tile  = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ICONS_28));
   s_font_icon_arrow = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ICONS_24));
-  s_font_icons_mini = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ICONS_12));
   s_font_icon_t2    = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ICONS_18));
 #elif defined(PBL_PLATFORM_BASALT)
   s_font_time       = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_TIME_38));
@@ -1168,7 +1409,6 @@ static void window_load(Window *window) {
   s_font_weather    = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ICONS_26));
   s_font_icon_tile  = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ICONS_20));
   s_font_icon_arrow = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ICONS_17));
-  s_font_icons_mini = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ICONS_10));
   s_font_icon_t2    = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ICONS_13));
 #endif
 
@@ -1186,7 +1426,6 @@ static void window_unload(Window *window) {
   fonts_unload_custom_font(s_font_weather);
   fonts_unload_custom_font(s_font_icon_tile);
   fonts_unload_custom_font(s_font_icon_arrow);
-  fonts_unload_custom_font(s_font_icons_mini);
   fonts_unload_custom_font(s_font_icon_t2);
 }
 
@@ -1208,6 +1447,16 @@ static void init(void) {
   if (persist_exists(PERSIST_WEEK_START)) s_week_start = (persist_read_int(PERSIST_WEEK_START) == 0) ? 0 : 1;
   if (persist_exists(PERSIST_WEEK_REF_DN)) s_week_ref_dn = (long)persist_read_int(PERSIST_WEEK_REF_DN);
   if (persist_exists(PERSIST_HRM_LAST))   s_hrm_last = persist_read_int(PERSIST_HRM_LAST);
+  if (persist_exists(PERSIST_HR_REST))    s_hr_rest  = persist_read_int(PERSIST_HR_REST);
+  // Restore the average accumulator only if it belongs to today; otherwise
+  // leave it zeroed so update_hr_average() rebuilds from this midnight.
+  if (persist_exists(PERSIST_HR_DAY)
+        && (time_t)persist_read_int(PERSIST_HR_DAY) == time_start_of_today()) {
+    s_hr_day     = (time_t)persist_read_int(PERSIST_HR_DAY);
+    s_hr_sum     = persist_read_int(PERSIST_HR_SUM);
+    s_hr_count   = persist_read_int(PERSIST_HR_COUNT);
+    s_hr_scanned = (time_t)persist_read_int(PERSIST_HR_SCANNED);
+  }
 
   // Cached weather/location so the first draw after a restart shows the last
   // known values instead of blanks while the fresh fetch is still in flight.
@@ -1251,6 +1500,8 @@ static void init(void) {
   update_steps_data();
   update_sleep_data();
   update_hrm_data();
+  update_hr_average();
+  update_hr_resting();
 
   s_window = window_create();
   window_set_background_color(s_window, GColorBlack);

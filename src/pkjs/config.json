@@ -147,7 +147,7 @@
             "value": "4"
           },
           {
-            "label": "Heart rate",
+            "label": "Heart rate (average)",
             "value": "5"
           },
           {
@@ -177,6 +177,14 @@
           {
             "label": "Battery",
             "value": "12"
+          },
+          {
+            "label": "Heart rate (resting)",
+            "value": "13"
+          },
+          {
+            "label": "Heart rate (current/resting)",
+            "value": "14"
           }
         ]
       },
@@ -207,7 +215,7 @@
             "value": "4"
           },
           {
-            "label": "Heart rate",
+            "label": "Heart rate (average)",
             "value": "5"
           },
           {
@@ -237,6 +245,14 @@
           {
             "label": "Battery",
             "value": "12"
+          },
+          {
+            "label": "Heart rate (resting)",
+            "value": "13"
+          },
+          {
+            "label": "Heart rate (current/resting)",
+            "value": "14"
           }
         ]
       },
@@ -267,7 +283,7 @@
             "value": "4"
           },
           {
-            "label": "Heart rate",
+            "label": "Heart rate (average)",
             "value": "5"
           },
           {
@@ -297,6 +313,14 @@
           {
             "label": "Battery",
             "value": "12"
+          },
+          {
+            "label": "Heart rate (resting)",
+            "value": "13"
+          },
+          {
+            "label": "Heart rate (current/resting)",
+            "value": "14"
           }
         ]
       },
@@ -327,7 +351,7 @@
             "value": "4"
           },
           {
-            "label": "Heart rate",
+            "label": "Heart rate (average)",
             "value": "5"
           },
           {
@@ -357,6 +381,14 @@
           {
             "label": "Battery",
             "value": "12"
+          },
+          {
+            "label": "Heart rate (resting)",
+            "value": "13"
+          },
+          {
+            "label": "Heart rate (current/resting)",
+            "value": "14"
           }
         ]
       }
@@ -376,11 +408,11 @@
         "defaultValue": "C",
         "options": [
           {
-            "label": "Celsius (\u00b0C)",
+            "label": "Celsius (°C)",
             "value": "C"
           },
           {
-            "label": "Fahrenheit (\u00b0F)",
+            "label": "Fahrenheit (°F)",
             "value": "F"
           }
         ]
