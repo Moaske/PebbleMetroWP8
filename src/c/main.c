@@ -183,10 +183,13 @@
 #define PERSIST_HR_COUNT     129
 #define PERSIST_HR_SCANNED   130   // first minute not yet folded into the average
 #define PERSIST_HR_REST      131
+#define PERSIST_HR_REST_DAY  132   // the day s_hr_rest was last computed for
 
 #define FLIP_DURATION_MS   200
 #define FLIP_DELAY_MS      1000
-#define LIGHT_POLL_MS      250
+// Long enough for the first frame to be on screen before the heart-rate
+// history scans run, short enough that a stale figure is never actually seen.
+#define HR_PRIME_DELAY_MS  300
 
 // ─── Globals ─────────────────────────────────────────────────────────────────
 static Window *s_window;
@@ -226,6 +229,7 @@ static int32_t s_hr_count   = 0;
 static time_t  s_hr_day     = 0;   // start-of-day the accumulator belongs to
 static time_t  s_hr_scanned = 0;   // first minute not yet folded into the sum
 static int     s_hr_rest    = -1;  // resting BPM, -1 = never had enough data
+static time_t  s_hr_rest_day = 0;  // day s_hr_rest covers; 0 = never computed
 static char s_location[32] = "";
 static int  s_phone_battery = -1;
 static bool s_phone_charging = false;
@@ -243,8 +247,7 @@ static bool      s_tile_flipping[TILE_COUNT];
 static int       s_flip_phase[TILE_COUNT];
 static AppTimer *s_flip_timer[TILE_COUNT];
 static AppTimer *s_flip_delay_timer;
-static AppTimer *s_light_poll_timer;
-static bool      s_light_was_on = false;
+static AppTimer *s_hr_prime_timer;
 
 // ─── Weather icons ───────────────────────────────────────────────────────────
 static const char *WEATHER_ICONS[] = {
@@ -592,7 +595,10 @@ static void update_hr_average(void) {
   }
 
   time_t now = time(NULL);
-  if (s_hr_scanned >= now) return;
+  // Minute history gains at most one record per minute, so a second pass
+  // inside the same minute can only re-read flash to find nothing. Raising
+  // your wrist repeatedly is exactly that case.
+  if (now - s_hr_scanned < SECONDS_PER_MINUTE) return;
 
   HealthMinuteData rec[HR_MINUTE_CHUNK];
   time_t before = s_hr_scanned;
@@ -680,8 +686,17 @@ static bool sleep_interval_cb(HealthActivity activity, time_t time_start,
 // night's sleep. Below REST_HR_MIN_READINGS qualifying minutes the companion
 // app returns nothing rather than a figure drawn from too little data; here
 // that means the previously computed value simply stays on screen.
-static void update_hr_resting(void) {
+//
+// `force` must be true only when the underlying sleep data may have changed
+// (a HealthEventSleepUpdate). Otherwise the cached figure for today is reused:
+// this scan walks last night's sleep minute by minute out of the health
+// database, which is far too expensive to repeat on every launch -- and a
+// watchface is relaunched every single time the user comes back to it from
+// another app.
+static void update_hr_resting(bool force) {
   time_t day = time_start_of_today();
+  if (!force && s_hr_rest_day == day && s_hr_rest > 0) return;
+
   time_t search_start = day - SLEEP_WINDOW_BEFORE_SEC;
   time_t search_end   = day + SLEEP_WINDOW_AFTER_SEC;
   time_t now = time(NULL);
@@ -698,7 +713,9 @@ static void update_hr_resting(void) {
   int sum = 0;
   for (int i = 0; i < a.n; i++) sum += a.lowest[i];
   s_hr_rest = (sum + a.n / 2) / a.n;                      // round half up
+  s_hr_rest_day = day;
   persist_write_int(PERSIST_HR_REST, s_hr_rest);
+  persist_write_int(PERSIST_HR_REST_DAY, (int32_t)s_hr_rest_day);
 }
 
 #else
@@ -707,7 +724,7 @@ static void update_hr_resting(void) {
 // hr_average() deliberately gets none, because its only call site is itself
 // Emery-only and an unused static here would warn at build time.
 static void update_hr_average(void) {}
-static void update_hr_resting(void) {}
+static void update_hr_resting(bool force) { (void)force; }
 #endif
 
 // ─── Fonts ───────────────────────────────────────────────────────────────────
@@ -1245,33 +1262,40 @@ static void trigger_wakeup_flips(void) {
 }
 
 // ─── Wake detection ──────────────────────────────────────────────────────────
-// No "backlight turned on" event exists in the public SDK and watchfaces
-// can't use TouchService, so poll light_is_on() and trigger on the rising
-// edge -- that catches wrist flick, tap and button press uniformly.
-static void light_poll_callback(void *context) {
-  bool now_on = light_is_on();
-  if (now_on && !s_light_was_on) {
-    update_steps_data();
-    update_sleep_data();
-    update_hrm_data();
-    update_hr_average();   // incremental: only reads minutes recorded since
-                           // the last pass, so this stays cheap on every wake
-    trigger_wakeup_flips();
-  }
-  s_light_was_on = now_on;
-  s_light_poll_timer = app_timer_register(LIGHT_POLL_MS, light_poll_callback, NULL);
-}
-
-// Second, independent trigger: the light poll only fires for people who have
-// backlight-on-motion enabled. With that off the accelerometer still reports
-// the flick fine. start_flip() no-ops on a tile already mid-flip, so an
-// overlap between the two is harmless.
+// The accelerometer's tap service is the ONLY wake trigger, deliberately.
+//
+// app_light.h exposes no backlight event -- only the app_light_is_on() getter
+// -- so catching a backlight-on wake means polling it. At the 250ms needed for
+// the flip to feel attached to the gesture that is ~345,600 timer wakeups a
+// day, against 1,440 for the minute tick, and it bought nothing functional:
+// just the decorative flip. Pebble's own battery guidance names short-interval
+// timers as a drain and lists tap/wrist-shake detection among the CHEAP ways to
+// trigger an animation, which is exactly this trade.
+//
+// accel_tap_service costs effectively nothing by comparison: the accelerometer
+// is already running for Pebble Health's step counting, and the handler is
+// driven by the sensor's own tap interrupt rather than by the app waking to
+// look. The one thing lost is the flip when the backlight comes on WITHOUT a
+// tap -- in practice a button press.
 static void accel_tap_handler(AccelAxisType axis, int32_t direction) {
   update_steps_data();
   update_sleep_data();
   update_hrm_data();
+  // Incremental, and further guarded below so repeated flicks within the same
+  // minute don't each hit the health database -- per-minute data cannot have
+  // changed in between.
   update_hr_average();
   trigger_wakeup_flips();
+}
+
+// Deferred so the watchface's first frame isn't waiting on flash reads. See
+// the note in init(). update_hr_resting(false) leans on its day cache, so on
+// nearly every launch this is a no-op and only the average is topped up.
+static void hr_prime_callback(void *context) {
+  s_hr_prime_timer = NULL;
+  update_hr_average();
+  update_hr_resting(false);
+  layer_mark_dirty(s_canvas_layer);
 }
 
 static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
@@ -1368,8 +1392,9 @@ static void health_handler(HealthEventType event, void *context) {
     case HealthEventSleepUpdate:
       update_sleep_data();
       // Last night's sleep intervals are what the resting figure is measured
-      // over, so this is the only event that can change it.
-      update_hr_resting();
+      // over, so this is the only event that can change it -- and the only
+      // place that may bypass the day cache.
+      update_hr_resting(true);
       break;
     case HealthEventHeartRateUpdate:
       update_hrm_data();
@@ -1380,7 +1405,7 @@ static void health_handler(HealthEventType event, void *context) {
       update_sleep_data();
       update_hrm_data();
       update_hr_average();
-      update_hr_resting();
+      update_hr_resting(true);
       break;
     default: break;
   }
@@ -1447,7 +1472,8 @@ static void init(void) {
   if (persist_exists(PERSIST_WEEK_START)) s_week_start = (persist_read_int(PERSIST_WEEK_START) == 0) ? 0 : 1;
   if (persist_exists(PERSIST_WEEK_REF_DN)) s_week_ref_dn = (long)persist_read_int(PERSIST_WEEK_REF_DN);
   if (persist_exists(PERSIST_HRM_LAST))   s_hrm_last = persist_read_int(PERSIST_HRM_LAST);
-  if (persist_exists(PERSIST_HR_REST))    s_hr_rest  = persist_read_int(PERSIST_HR_REST);
+  if (persist_exists(PERSIST_HR_REST))     s_hr_rest = persist_read_int(PERSIST_HR_REST);
+  if (persist_exists(PERSIST_HR_REST_DAY)) s_hr_rest_day = (time_t)persist_read_int(PERSIST_HR_REST_DAY);
   // Restore the average accumulator only if it belongs to today; otherwise
   // leave it zeroed so update_hr_average() rebuilds from this midnight.
   if (persist_exists(PERSIST_HR_DAY)
@@ -1492,16 +1518,20 @@ static void init(void) {
 
   tick_timer_service_subscribe(MINUTE_UNIT, tick_handler);
 
-  s_light_was_on = light_is_on();
-  s_light_poll_timer = app_timer_register(LIGHT_POLL_MS, light_poll_callback, NULL);
   accel_tap_service_subscribe(accel_tap_handler);
 
   health_service_events_subscribe(health_handler, NULL);
+  // Cheap: single aggregate/peek queries against the health service.
   update_steps_data();
   update_sleep_data();
   update_hrm_data();
-  update_hr_average();
-  update_hr_resting();
+  // The two heart-rate figures are NOT primed here. Both read per-minute
+  // history out of the health database, and anything on this side of
+  // window_stack_push() delays the first frame -- which the user sees as lag
+  // every time they return to the watchface from another app, since that
+  // relaunches it. Their displayed values were just restored from persist, so
+  // the first draw is already correct; the timer only tops them up.
+  s_hr_prime_timer = app_timer_register(HR_PRIME_DELAY_MS, hr_prime_callback, NULL);
 
   s_window = window_create();
   window_set_background_color(s_window, GColorBlack);
@@ -1515,7 +1545,7 @@ static void deinit(void) {
   tick_timer_service_unsubscribe();
   health_service_events_unsubscribe();
   accel_tap_service_unsubscribe();
-  if (s_light_poll_timer) app_timer_cancel(s_light_poll_timer);
+  if (s_hr_prime_timer)   app_timer_cancel(s_hr_prime_timer);
   window_destroy(s_window);
 }
 
