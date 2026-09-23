@@ -1,7 +1,7 @@
 # Pebble Metro WP8
 Retro Windows Phone 8 Metro style watchface.
 For Pebble Time 2, Time and Time Steel (Emery & Basalt).<br>
-Current version: 1.6.0  |  https://apps.repebble.com/metro-wp8_b406d87ebcd144ff9cd278a3
+Current version: 1.6.3  |  https://apps.repebble.com/metro-wp8_b406d87ebcd144ff9cd278a3
 
 ## NEW! Selectable Live Tiles.
 Select any of below Tile types for slots 3, 5, 6 and 7. Available Tiles:
