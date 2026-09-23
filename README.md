@@ -10,7 +10,7 @@ Select any of below Tile types for slots 3, 5, 6 and 7. Available Tiles:
 - Daily sleep total
 - Moon phase
 - Rain forecast
-- Heart rate (Emery only of course; option hidden for Basalt)
+- Several Heart rate tiles (Emery only of course; option hidden for Basalt)
 - Calories burned today
 - Sunrise/sunset
 - Week numbers (😎 personal need)
