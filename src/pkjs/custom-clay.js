@@ -148,6 +148,14 @@ module.exports = function(minified) {
     '.mtprev-nav-arrow svg polygon { fill:#fff; }' +
     '.mtprev-shell.mtprev-light .mtprev-nav-arrow svg polygon { fill:#000; }' +
     '.mtprev-caption { font-family:"Segoe UI",Arial,sans-serif; font-size:11px; color:#888; margin-top:8px; }' +
+    // Collapsible sections. The chevron is a ::after on Clay's own heading
+    // component rather than an injected element, so the heading's markup is
+    // left exactly as Clay built it.
+    '.mtsec-head { cursor:pointer; -webkit-user-select:none; user-select:none; }' +
+    '.mtsec-head::after { content:"\\25BE"; position:absolute; right:14px; top:50%;' +
+      ' margin-top:-2px; font-size:13px; opacity:0.45; -webkit-transition:-webkit-transform 0.15s;' +
+      ' transition:transform 0.15s; }' +
+    '.mtsec-head.mtsec-closed::after { -webkit-transform:rotate(-90deg); transform:rotate(-90deg); }' +
     '</style>' +
     '<div class="mtprev-wrap">' +
       '<div class="mtprev-shell" id="mtprev-shell">' +
@@ -207,6 +215,68 @@ module.exports = function(minified) {
     var container = document.createElement('div');
     container.innerHTML = previewHtml;
     document.body.insertBefore(container, document.body.firstChild);
+
+    // ─── Collapsible sections ──────────────────────────────────────────────
+    // Clay has no collapsible section and no way to add one from config.json:
+    // clay-config.js renders `type:"section"` as a bare <div class="section">
+    // and recurses into its items -- the section is never a ClayItem, so it
+    // has no id, no attributes and nothing to hook. Doing it here keeps
+    // config.json portable and costs the watch nothing.
+    //
+    // The Save button and the health note sit at the TOP level of config.json,
+    // outside every section, so collapsing can never hide them.
+    var SECTIONS_OPEN = ['Live Tile picker'];   // headings left expanded
+
+    Array.prototype.forEach.call(document.querySelectorAll('.section'), function(sec) {
+      var head = sec.querySelector('.component-heading');
+      // Only a section whose heading comes first can be collapsed from it.
+      if (!head || head !== sec.firstElementChild) return;
+
+      // Everything after the heading becomes the collapsible body. Moving the
+      // nodes rather than hiding them one by one means Clay's own
+      // ".component ~ .component" spacing rules stay intact inside.
+      var body = document.createElement('div');
+      while (head.nextSibling) body.appendChild(head.nextSibling);
+      sec.appendChild(body);
+
+      var open = SECTIONS_OPEN.indexOf((head.textContent || '').trim()) !== -1;
+      head.className += ' mtsec-head';
+
+      function apply() {
+        body.style.display = open ? '' : 'none';
+        head.className = head.className.replace(/\s*mtsec-closed/g, '') +
+                         (open ? '' : ' mtsec-closed');
+      }
+      head.onclick = function() { open = !open; apply(); };
+      apply();
+    });
+
+    // ─── Week number source: show only the input that applies ──────────────
+    // config.json can't express "show this item when that toggle is on", so
+    // the date picker and the CSV URL are both declared and one is hidden
+    // here. Hiding rather than disabling keeps whichever value you typed, so
+    // flipping back and forth doesn't lose the other one.
+    (function() {
+      var srcItem  = clayConfig.getItemByMessageKey('week_use_csv');
+      var dateItem = clayConfig.getItemByMessageKey('week_ref_date');
+      var urlItem  = clayConfig.getItemByMessageKey('week_csv_url');
+      if (!srcItem || !dateItem || !urlItem) return;
+
+      function el(item) {
+        // Clay items expose $element as a minified wrapper on some versions
+        // and a bare node on others.
+        var e = item.$element;
+        return (e && e[0]) ? e[0] : e;
+      }
+      function applySource() {
+        var useCsv = !!srcItem.get();
+        var d = el(dateItem), u = el(urlItem);
+        if (d) d.style.display = useCsv ? 'none' : '';
+        if (u) u.style.display = useCsv ? '' : 'none';
+      }
+      srcItem.on('change', applySource);
+      applySource();
+    })();
 
     function applyPreviewState() {
       var shell = document.getElementById('mtprev-shell');

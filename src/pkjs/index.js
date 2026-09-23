@@ -24,6 +24,27 @@ var clay = new Clay(clayConfig, customClay, { autoHandleEvents: false });
 // How often to refresh weather/AQI while the watchface is active, in ms.
 var REFRESH_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
 
+// ─── Week-number CSV ─────────────────────────────────────────────────────────
+// The whole school year crosses to the watch in one go, not just the current
+// week: the watch then formats the tile itself from its own ISO week number
+// and keeps working with the phone out of range or switched off. Sending only
+// today's label would go stale the moment a week rolled over while
+// disconnected.
+//
+// Layout -- 1 version byte, then 3 bytes per ISO week 1..53, indexed by week:
+//   byte 0  period, as a plain number (0 also means "no period")
+//   byte 1  edu week code: 0 = blank, 1 = "V", 2 = "00", n >= 3 = decimal n-3
+//   byte 2  first character of Info, ASCII; 0 = none
+// 160 bytes in total, comfortably inside PERSIST_DATA_MAX_LENGTH (256) so the
+// watch can persist it verbatim, and inside the 512-byte AppMessage inbox.
+var WEEK_TABLE_WEEKS   = 53;
+var WEEK_TABLE_STRIDE  = 3;
+var WEEK_TABLE_VERSION = 1;
+// The CSV is a school-year calendar -- it changes when he publishes a new one,
+// not during the day. Once a day is plenty.
+var WEEK_CSV_INTERVAL_MS = 24 * 60 * 60 * 1000;
+var WEEK_CSV_MAX_BYTES   = 8 * 1024;
+
 // ─── WMO weather code → icon index mapping ────────────────────────────────────
 // Indices match WEATHER_ICONS[] in main.c
 function wmoToIconIndex(code) {
@@ -317,6 +338,171 @@ function refreshWeather() {
   );
 }
 
+// ─── Week-number CSV: parse, encode, send ────────────────────────────────────
+// parseCsv and findColumn are lifted from the EduWeek app, which reads the
+// same file -- keeping them identical means the two can never disagree about
+// what a given CSV says. Both handle the things Excel actually emits: a UTF-8
+// BOM, CRLF endings, quoted fields, and ";" as the separator in locales where
+// Excel uses it.
+function parseCsv(text) {
+  text = text.replace(/^﻿/, '');
+  var firstLine = text.split(/\r?\n/)[0] || '';
+  var sep = firstLine.split(';').length > firstLine.split(',').length ? ';' : ',';
+
+  var rows = [], row = [], field = '', inQuotes = false;
+  for (var i = 0; i < text.length; i++) {
+    var c = text.charAt(i);
+    if (inQuotes) {
+      if (c === '"') {
+        if (text.charAt(i + 1) === '"') { field += '"'; i++; }
+        else inQuotes = false;
+      } else {
+        field += c;
+      }
+    } else if (c === '"') {
+      inQuotes = true;
+    } else if (c === sep) {
+      row.push(field); field = '';
+    } else if (c === '\n' || c === '\r') {
+      if (c === '\r' && text.charAt(i + 1) === '\n') i++;
+      row.push(field); rows.push(row); row = []; field = '';
+    } else {
+      field += c;
+    }
+  }
+  if (field !== '' || row.length) { row.push(field); rows.push(row); }
+  return rows.filter(function(r) { return r.join('').trim() !== ''; });
+}
+
+function findColumn(headers, names, fallback) {
+  for (var i = 0; i < headers.length; i++) {
+    if (names.indexOf(headers[i].trim().toLowerCase()) >= 0) return i;
+  }
+  return fallback;
+}
+
+// Returns the byte array described above, or null if the CSV yielded nothing
+// usable -- in which case the watch keeps whatever table it already has.
+function buildWeekTable(csvText) {
+  var table = parseCsv(csvText);
+  if (table.length < 2) return null;
+
+  var hdr = table[0];
+  var cWeek   = findColumn(hdr, ['iso week', 'isoweek', 'week', 'iso'], 0);
+  var cPeriod = findColumn(hdr, ['period'], 1);
+  var cEdu    = findColumn(hdr, ['edu week', 'eduweek', 'edu'], 2);
+  var cInfo   = findColumn(hdr, ['info', 'note', 'notes'], 3);
+
+  var buf = [WEEK_TABLE_VERSION];
+  for (var i = 0; i < WEEK_TABLE_WEEKS * WEEK_TABLE_STRIDE; i++) buf.push(0);
+
+  var filled = 0;
+  for (var r = 1; r < table.length; r++) {
+    var row = table[r];
+    var iso = parseInt((row[cWeek] || '').trim(), 10);
+    if (!(iso >= 1 && iso <= WEEK_TABLE_WEEKS)) continue;
+    var o = 1 + (iso - 1) * WEEK_TABLE_STRIDE;
+
+    var period = parseInt((row[cPeriod] || '').trim(), 10);
+    buf[o] = (period >= 0 && period <= 255) ? period : 0;
+
+    // "V" and "00" are their own codes because both must render back exactly
+    // as written -- "00" is not the same string as "0", and V marks a holiday.
+    var edu = (row[cEdu] || '').trim(), code = 0;
+    if (edu.toUpperCase() === 'V') code = 1;
+    else if (edu === '00')         code = 2;
+    else {
+      var n = parseInt(edu, 10);
+      if (!isNaN(n) && n >= 0 && n <= 252) code = n + 3;
+    }
+    buf[o + 1] = code;
+
+    var info = (row[cInfo] || '').trim();
+    buf[o + 2] = info ? (info.charCodeAt(0) & 0x7F) : 0;
+    filled++;
+  }
+  console.log('Week CSV: ' + filled + ' of ' + (table.length - 1) + ' rows encoded');
+  return filled ? buf : null;
+}
+
+// Clay only hands settings to webviewclosed; everywhere else they have to come
+// back out of the localStorage copy it writes. Keys there are the numeric
+// messageKey ids, with the name as a fallback for older stored blobs.
+function savedSetting(numericKey, name) {
+  try {
+    var s = JSON.parse(localStorage.getItem('clay-settings')) || {};
+    var v = s[numericKey];
+    if (v === undefined) v = s[name];
+    return v;
+  } catch (e) {
+    return undefined;
+  }
+}
+
+// Copying a file's address out of the GitHub UI gives you the /blob/ page --
+// 200+ KB of HTML wrapping the file, not the file. Fetching that also goes
+// through github.com proper, which rate-limits far more readily than the raw
+// host does (it answers a burst with 429). Rewriting it is mechanical, so do
+// that rather than making the user know the difference.
+//   https://github.com/U/R/blob/main/path.csv
+//     -> https://raw.githubusercontent.com/U/R/main/path.csv
+function normalizeCsvUrl(url) {
+  var m = /^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/(?:blob|raw)\/(.+)$/i.exec(url);
+  if (m) {
+    return 'https://raw.githubusercontent.com/' + m[1] + '/' + m[2] + '/' +
+           m[3].split('?')[0].split('#')[0];
+  }
+  // A gist page likewise needs /raw to give up the file itself.
+  m = /^https?:\/\/gist\.github\.com\/([^/]+)\/([0-9a-f]+)\/?$/i.exec(url);
+  if (m) return 'https://gist.githubusercontent.com/' + m[1] + '/' + m[2] + '/raw';
+  return url;
+}
+
+function refreshWeekTable() {
+  if (!savedSetting(messageKeys.week_use_csv, 'week_use_csv')) return;
+  var raw = (savedSetting(messageKeys.week_csv_url, 'week_csv_url') || '').trim();
+  if (!raw) return;
+  var url = normalizeCsvUrl(raw);
+  if (url !== raw) console.log('Week CSV: using raw URL ' + url);
+
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', url, true);
+  xhr.onload = function() {
+    if (xhr.readyState !== 4 || xhr.status !== 200) {
+      console.log('Week CSV fetch failed: status ' + xhr.status +
+                  (xhr.status === 429 ? ' (rate limited - use the raw.githubusercontent.com link)' : ''));
+      return;   // keep whatever the watch already has
+    }
+    var text = xhr.responseText || '';
+    // An HTML page parses as "CSV" perfectly happily and yields garbage, so
+    // catch it by shape and say what is actually wrong.
+    if (/^\s*[<]/.test(text)) {
+      console.log('Week CSV: that URL returned an HTML page, not a CSV. ' +
+                  'Open the file on GitHub and use the "Raw" button\'s link.');
+      return;
+    }
+    if (text.length > WEEK_CSV_MAX_BYTES) {
+      console.log('Week CSV too large (' + text.length + ' chars) - ignored');
+      return;
+    }
+    try {
+      var buf = buildWeekTable(text);
+      if (!buf) { console.log('Week CSV had no usable rows'); return; }
+      var msg = {};
+      msg[messageKeys.WEEK_TABLE] = buf;
+      Pebble.sendAppMessage(msg, function() {
+        console.log('Week table sent: ' + buf.length + ' bytes');
+      }, function(e) {
+        console.log('Week table send failed: ' + JSON.stringify(e));
+      });
+    } catch (e) {
+      console.log('Week CSV parse error: ' + e.message);
+    }
+  };
+  xhr.onerror = function() { console.log('Week CSV fetch error'); };
+  xhr.send();
+}
+
 // ─── Pebble event listeners ───────────────────────────────────────────────────
 Pebble.addEventListener('showConfiguration', function() {
   Pebble.openURL(clay.generateUrl());
@@ -329,6 +515,8 @@ Pebble.addEventListener('ready', function() {
   // normal launch. Only weather/AQI need fetching from the phone.
   refreshWeather();
   setInterval(refreshWeather, REFRESH_INTERVAL_MS);
+  refreshWeekTable();
+  setInterval(refreshWeekTable, WEEK_CSV_INTERVAL_MS);
   initPhoneBattery();
 });
 
@@ -362,7 +550,7 @@ Pebble.addEventListener('webviewclosed', function(e) {
   var tileB     = intSetting(messageKeys.tile_b_select, 1);
   var tileC     = intSetting(messageKeys.tile_c_select, 2);
   var tileD     = intSetting(messageKeys.tile_d_select, 12);
-  var weekStart = intSetting(messageKeys.week_start_select, 1);
+  var useCsv    = !!settings[messageKeys.week_use_csv];
   var weekRefDn = dateToDayNumber(settings[messageKeys.week_ref_date]);
   var windUnit  = settings[messageKeys.wind_unit_select];   // 'kmh' or 'mph'
 
@@ -377,19 +565,23 @@ Pebble.addEventListener('webviewclosed', function(e) {
   msg[messageKeys.TILE_B]     = tileB;
   msg[messageKeys.TILE_C]     = tileC;
   msg[messageKeys.TILE_D]     = tileD;
-  msg[messageKeys.WEEK_START] = (weekStart === 0) ? 0 : 1;
   msg[messageKeys.WIND_UNIT]  = (windUnit === 'mph') ? 1 : 0;
+  // Only one offset source is live at a time. Sending WEEK_SRC lets the watch
+  // fall back to the date calculation the moment the toggle goes off, without
+  // having to clear the stored table.
+  msg[messageKeys.WEEK_SRC] = useCsv ? 1 : 0;
   if (weekRefDn >= 0) msg[messageKeys.WEEK_REF_DN] = weekRefDn;
 
   Pebble.sendAppMessage(msg, function() {
     console.log('Settings sent: accent=' + hex + ' theme=' + theme +
                 ' tempUnit=' + tempUnit + ' dateOrder=' + dateOrder +
                 ' tiles=' + tileA + '/' + tileB + '/' + tileC + '/' + tileD +
-                ' weekStart=' + weekStart + ' weekRefDn=' + weekRefDn +
+                ' weekRefDn=' + weekRefDn +
                 ' windUnit=' + windUnit);
   }, function(err) {
     console.log('Settings send failed: ' + JSON.stringify(err));
   });
 
   refreshWeather();
+  refreshWeekTable();   // picks up a changed URL, or a freshly enabled CSV
 });

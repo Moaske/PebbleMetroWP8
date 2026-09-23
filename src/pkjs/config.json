@@ -118,7 +118,7 @@
       },
       {
         "type": "text",
-        "defaultValue": "Pick what each of the three outlined tiles shows. Time, date, weather and battery are fixed. Some tiles have additional settings further down this screen."
+        "defaultValue": "Pick what each of the four outlined tiles shows. Time, date and weather are fixed. Some tiles have additional settings further down this screen."
       },
       {
         "type": "select",
@@ -460,36 +460,39 @@
       },
       {
         "type": "text",
-        "defaultValue": "First-day setting applies to both lines."
+        "defaultValue": "Top line is the ISO week number. ISO weeks run from Monday to Sunday."
       },
       {
-        "type": "radiogroup",
-        "messageKey": "week_start_select",
-        "label": "First day of week",
-        "defaultValue": "1",
-        "options": [
-          {
-            "label": "Monday (ISO)",
-            "value": "1"
-          },
-          {
-            "label": "Sunday",
-            "value": "0"
-          }
-        ]
+        "type": "text",
+        "defaultValue": "The second line is your own week count. Take it from a start date, or from a CSV you host online."
+      },
+      {
+        "type": "toggle",
+        "messageKey": "week_use_csv",
+        "label": "Use an online CSV",
+        "defaultValue": false
       },
       {
         "type": "input",
         "messageKey": "week_ref_date",
-        "label": "Offset week number start date",
+        "label": "Offset week start date",
         "attributes": {
           "type": "date",
           "placeholder": "YYYY-MM-DD"
         }
       },
       {
+        "type": "input",
+        "messageKey": "week_csv_url",
+        "label": "CSV URL",
+        "attributes": {
+          "type": "url",
+          "placeholder": "https://raw.githubusercontent.com/..."
+        }
+      },
+      {
         "type": "text",
-        "defaultValue": "Starts at week 00 for whichever week contains this date."
+        "defaultValue": "<u>Start date:</u><br>Counting begins at week 00 for whichever ISO week contains that date.<br><u>CSV:</u><br>https://github.com/Moaske/PebbleEduWeek for further details on formatting."
       }
     ]
   },

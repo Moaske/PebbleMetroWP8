@@ -139,8 +139,9 @@
 #define KEY_TILE_B       MESSAGE_KEY_TILE_B
 #define KEY_TILE_C       MESSAGE_KEY_TILE_C
 #define KEY_TILE_D       MESSAGE_KEY_TILE_D
-#define KEY_WEEK_START   MESSAGE_KEY_WEEK_START   // 0 = Sunday, 1 = Monday
 #define KEY_WEEK_REF_DN  MESSAGE_KEY_WEEK_REF_DN  // offset-week start, days since 1970-01-01
+#define KEY_WEEK_SRC     MESSAGE_KEY_WEEK_SRC     // 0 = start date, 1 = CSV table
+#define KEY_WEEK_TABLE   MESSAGE_KEY_WEEK_TABLE   // packed school-year table
 #define KEY_WIND_UNIT    MESSAGE_KEY_WIND_UNIT     // 0 = km/h, 1 = mph
 #define KEY_OZONE        MESSAGE_KEY_OZONE          // ug/m3
 #define KEY_THEME        MESSAGE_KEY_THEME
@@ -173,7 +174,6 @@
 #define PERSIST_TILE_B       119
 #define PERSIST_TILE_C       120
 #define PERSIST_TILE_D       126
-#define PERSIST_WEEK_START   121
 #define PERSIST_WEEK_REF_DN  122
 #define PERSIST_HRM_LAST     123
 #define PERSIST_WIND_UNIT    124
@@ -184,6 +184,8 @@
 #define PERSIST_HR_SCANNED   130   // first minute not yet folded into the average
 #define PERSIST_HR_REST      131
 #define PERSIST_HR_REST_DAY  132   // the day s_hr_rest was last computed for
+#define PERSIST_WEEK_SRC     133
+#define PERSIST_WEEK_TABLE   134
 
 #define FLIP_DURATION_MS   200
 #define FLIP_DELAY_MS      1000
@@ -215,8 +217,8 @@ static int  s_wind_speed   = -1;   // km/h
 static int  s_wind_dir     = -1;   // degrees
 static int  s_precip_prob  = -1;   // % chance, coming hour
 static int  s_ozone        = -1;   // ug/m3
-static int  s_week_start   = 1;    // 0 = Sunday, 1 = Monday (ISO default)
 static long s_week_ref_dn  = -1;   // offset-week start date, -1 = not configured
+static bool s_week_use_csv = false;  // false = offset from start date, true = CSV table
 // The system samples heart rate only every few minutes, so a peek very often
 // returns 0 simply because no fresh reading exists -- that is normal, not an
 // error. Cache the last good value (persisted) so the tile keeps showing the
@@ -447,8 +449,10 @@ static bool is_leap(int y) { return (y % 4 == 0 && y % 100 != 0) || y % 400 == 0
 static int  days_in_year(int y) { return is_leap(y) ? 366 : 365; }
 
 // ISO-8601 week number, generalised so the week can start on Sunday too.
-// Strict ISO always starts Monday; s_week_start lets the user pick Sunday,
-// in which case this is "ISO rules, Sunday-based" rather than literal ISO.
+// ISO weeks start on Monday, full stop -- so every caller passes 1 and there
+// is no setting for it any more. The wstart parameter is kept only because the
+// arithmetic reads more clearly with the start day named than with the 1s
+// folded into it.
 static int week_number(const struct tm *t, int wstart) {
   int year    = t->tm_year + 1900;
   int ordinal = t->tm_yday + 1;                       // 1-based day of year
@@ -488,6 +492,52 @@ static int offset_week_number(const struct tm *t, int wstart, long ref_dn) {
   weeks %= 53;
   if (weeks < 0) weeks += 53;
   return (int)weeks;
+}
+
+// ─── School-year table (from the phone's CSV) ────────────────────────────────
+// The phone parses the CSV and sends the WHOLE year, not just this week, so
+// the tile keeps working with the phone off or out of range -- and rolls over
+// correctly at midnight on its own. Layout, built in index.js:
+//
+//   byte 0        format version
+//   then per ISO week 1..53, 3 bytes indexed by (week - 1):
+//     +0  period number
+//     +1  edu week code: 0 = blank, 1 = "V", 2 = "00", n >= 3 = decimal n-3
+//     +2  first character of the Info column, ASCII; 0 = none
+//
+// "V" and "00" get their own codes because both have to come back exactly as
+// the author typed them -- "00" is not "0", and V marks a holiday week.
+#define WEEK_TABLE_WEEKS   53
+#define WEEK_TABLE_STRIDE  3
+#define WEEK_TABLE_VERSION 1
+#define WEEK_TABLE_BYTES   (1 + WEEK_TABLE_WEEKS * WEEK_TABLE_STRIDE)   // 160
+
+static uint8_t s_week_table[WEEK_TABLE_BYTES];
+static int     s_week_table_len = 0;   // 0 = nothing received yet
+
+// Formats one ISO week as e.g. "1:10T". Returns false when there is no table
+// or no row for that week, so the caller can fall back.
+static bool week_table_label(int iso, char *out, size_t sz) {
+  if (s_week_table_len != WEEK_TABLE_BYTES) return false;
+  if (s_week_table[0] != WEEK_TABLE_VERSION) return false;
+  if (iso < 1 || iso > WEEK_TABLE_WEEKS) return false;
+
+  const uint8_t *e = s_week_table + 1 + (iso - 1) * WEEK_TABLE_STRIDE;
+  uint8_t period = e[0], code = e[1], info = e[2];
+  if (period == 0 && code == 0 && info == 0) return false;   // week not listed
+
+  char edu[8];
+  if (code == 0)      edu[0] = '\0';
+  else if (code == 1) { edu[0] = 'V'; edu[1] = '\0'; }
+  else if (code == 2) { edu[0] = '0'; edu[1] = '0'; edu[2] = '\0'; }
+  else                snprintf(edu, sizeof(edu), "%d", (int)code - 3);
+
+  // The separator is narrow on purpose -- it costs width the value line does
+  // not have. A hyphen leaves the widest string ("3-10T") at 35px of the 37px
+  // available on Emery, 25px of 27px on Basalt.
+  if (info) snprintf(out, sz, "%d-%s%c", (int)period, edu, (char)info);
+  else      snprintf(out, sz, "%d-%s",   (int)period, edu);
+  return true;
 }
 
 // ─── Sunrise/sunset formatting ───────────────────────────────────────────────
@@ -940,8 +990,14 @@ static void tile_spec_for(ContentId id, TileSpec *s) {
     case CONTENT_WEEKNR: {
       time_t now = time(NULL);
       struct tm *t = localtime(&now);
-      int iso = week_number(t, s_week_start);
-      int off = offset_week_number(t, s_week_start, s_week_ref_dn);
+      // Top line is the ISO week, so it is ALWAYS Monday-based -- that is what
+      // ISO-8601 means, and the CSV's first column holds ISO week numbers too.
+      // Letting the first-day preference move it shifted both the displayed
+      // number and the CSV row by one as soon as Sunday was chosen.
+      int iso = week_number(t, 1);
+      // The preference still governs the bottom line's own week count, which
+      // is the only place "which day starts a week" is a matter of taste.
+      int off = offset_week_number(t, 1, s_week_ref_dn);
 
       s->title    = "WEEKNR";
       s->dual     = true;
@@ -950,7 +1006,14 @@ static void tile_spec_for(ContentId id, TileSpec *s) {
       // Always two digits, so week 5 reads "05".
       snprintf(s->buf1, sizeof(s->buf1), "%02d", iso);
       s->l1_value = s->buf1;
-      if (off < 0) {
+
+      // Bottom line: the CSV table when it is switched on AND has a row for
+      // this week, otherwise the plain offset count. The fallback matters --
+      // it covers a CSV that hasn't arrived yet, a week the author left out,
+      // and the school year running past the end of the file.
+      if (s_week_use_csv && week_table_label(iso, s->buf2, sizeof(s->buf2))) {
+        s->l2_value = s->buf2;
+      } else if (off < 0) {
         s->l2_value = "--";   // no start date configured yet
       } else {
         snprintf(s->buf2, sizeof(s->buf2), "%02d", off);
@@ -1331,10 +1394,6 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
     s_date_order_mdy = (t->value->int32 == 1);
     persist_write_int(PERSIST_DATE_ORDER, t->value->int32);
   }
-  if ((t = dict_find(iter, KEY_WEEK_START))) {
-    s_week_start = (t->value->int32 == 0) ? 0 : 1;
-    persist_write_int(PERSIST_WEEK_START, s_week_start);
-  }
   if ((t = dict_find(iter, KEY_WIND_UNIT))) {
     s_wind_unit_mph = (t->value->int32 == 1);
     persist_write_int(PERSIST_WIND_UNIT, t->value->int32);
@@ -1342,6 +1401,21 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
   if ((t = dict_find(iter, KEY_WEEK_REF_DN))) {
     s_week_ref_dn = (long)t->value->int32;
     persist_write_int(PERSIST_WEEK_REF_DN, (int32_t)s_week_ref_dn);
+  }
+  if ((t = dict_find(iter, KEY_WEEK_SRC))) {
+    s_week_use_csv = (t->value->int32 == 1);
+    persist_write_int(PERSIST_WEEK_SRC, t->value->int32);
+  }
+  // Length-checked before anything is copied: a short or oversized payload is
+  // dropped whole rather than leaving a half-written table behind.
+  if ((t = dict_find(iter, KEY_WEEK_TABLE))) {
+    if (t->length == WEEK_TABLE_BYTES && t->value->data[0] == WEEK_TABLE_VERSION) {
+      memcpy(s_week_table, t->value->data, WEEK_TABLE_BYTES);
+      s_week_table_len = WEEK_TABLE_BYTES;
+      persist_write_data(PERSIST_WEEK_TABLE, s_week_table, WEEK_TABLE_BYTES);
+    } else {
+      APP_LOG(APP_LOG_LEVEL_WARNING, "week table ignored: %d bytes", (int)t->length);
+    }
   }
 
   if ((t = dict_find(iter, KEY_AQI)))          { s_aqi = t->value->int32;          persist_write_int(PERSIST_AQI, s_aqi); }
@@ -1469,8 +1543,12 @@ static void init(void) {
   if (persist_exists(PERSIST_TEMP_UNIT))  s_temp_unit_fahrenheit = (persist_read_int(PERSIST_TEMP_UNIT) == 1);
   if (persist_exists(PERSIST_DATE_ORDER)) s_date_order_mdy = (persist_read_int(PERSIST_DATE_ORDER) == 1);
   if (persist_exists(PERSIST_WIND_UNIT))  s_wind_unit_mph = (persist_read_int(PERSIST_WIND_UNIT) == 1);
-  if (persist_exists(PERSIST_WEEK_START)) s_week_start = (persist_read_int(PERSIST_WEEK_START) == 0) ? 0 : 1;
   if (persist_exists(PERSIST_WEEK_REF_DN)) s_week_ref_dn = (long)persist_read_int(PERSIST_WEEK_REF_DN);
+  if (persist_exists(PERSIST_WEEK_SRC))   s_week_use_csv = (persist_read_int(PERSIST_WEEK_SRC) == 1);
+  if (persist_exists(PERSIST_WEEK_TABLE)) {
+    int n = persist_read_data(PERSIST_WEEK_TABLE, s_week_table, sizeof(s_week_table));
+    s_week_table_len = (n == WEEK_TABLE_BYTES) ? n : 0;
+  }
   if (persist_exists(PERSIST_HRM_LAST))   s_hrm_last = persist_read_int(PERSIST_HRM_LAST);
   if (persist_exists(PERSIST_HR_REST))     s_hr_rest = persist_read_int(PERSIST_HR_REST);
   if (persist_exists(PERSIST_HR_REST_DAY)) s_hr_rest_day = (time_t)persist_read_int(PERSIST_HR_REST_DAY);
