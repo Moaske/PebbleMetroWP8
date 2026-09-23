@@ -492,7 +492,7 @@
       },
       {
         "type": "text",
-        "defaultValue": "<u>Start date:</u><br>Counting begins at week 00 for whichever ISO week contains that date.<br><u>CSV:</u><br>https://github.com/Moaske/PebbleEduWeek for further details on formatting."
+        "defaultValue": "<u>Start date:</u><br>Counting begins at week 00 for whichever ISO week contains that date.<br><u>CSV:</u><br>https://github.com/Moaske/PebbleMetroWP8 for further details on formatting."
       }
     ]
   },
