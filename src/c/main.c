@@ -1241,12 +1241,12 @@ static void draw_tile_content(GContext *ctx, TileId id, GRect r) {
       graphics_draw_text(ctx, buf, s_font_med, cur_r,
                          GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
 
-      snprintf(buf, sizeof(buf), "H %d\u00B0%c L %d\u00B0%c",
-               display_temp(s_temp_high), temp_unit_char(),
-               display_temp(s_temp_low),  temp_unit_char());
+      tw = inner.size.w + px - left_margin - WEATHER_TX_OFFSET;   // borrow the padding back
+      snprintf(buf, sizeof(buf), "H%d\u00B0 L%d\u00B0%c",
+            display_temp(s_temp_high), display_temp(s_temp_low), temp_unit_char());
       GRect hl_r = GRect(tx, top + WEATHER_HL_Y_OFFSET, tw,
                          inner.size.h - (top + WEATHER_HL_Y_OFFSET - inner.origin.y));
-      graphics_draw_text(ctx, buf, s_font_sm, hl_r,
+      graphics_draw_text(ctx, buf, s_font_sb, hl_r,
                          GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
       break;
     }
