@@ -13,7 +13,7 @@ Select any of below Tile types for slots 3, 5, 6 and 7. Available Tiles:
 - Several Heart rate tiles (Emery only of course; option hidden for Basalt)
 - Calories burned today
 - Sunrise/sunset
-- Week numbers (😎 personal need)
+- Week numbers (personal need 😎 For the CSV option for the offset, see: https://github.com/Moaske/PebbleEduWeek)
 - Windspeed and direction
 - UV Index
 - UV/Smog (bare UV number & Ozone (O3) reading)
