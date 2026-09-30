@@ -609,9 +609,6 @@ Pebble.addEventListener('webviewclosed', function(e) {
     console.log('Settings send failed: ' + JSON.stringify(err));
   });
 
-  // Nothing in the settings page changes what the weather fetch returns: the
-  // request reads no setting, and unit/format conversion all happens on the
-  // watch. So this only needs to run when the data has genuinely aged out.
-  if (!fetchedRecently(STAMP_WEATHER, REFRESH_INTERVAL_MS)) refreshWeather();
+  refreshWeather();
   refreshWeekTable();   // picks up a changed URL, or a freshly enabled CSV
 });
