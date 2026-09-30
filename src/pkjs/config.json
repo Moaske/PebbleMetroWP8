@@ -11,74 +11,78 @@
         "defaultValue": "Accent Colour"
       },
       {
+        "type": "text",
+        "defaultValue": "The (light) and (dark) labels advise on what Theme matches well"
+      },
+      {
         "type": "select",
         "messageKey": "accent_color",
         "label": "Tile colour",
-        "defaultValue": "#F0A30A",
+        "defaultValue": "#0055FF",
         "options": [
           {
-            "label": "Amber",
-            "value": "#F0A30A"
+            "label": "Red (dark)",
+            "value": "#FF0000"
           },
           {
-            "label": "Orange",
-            "value": "#FA6800"
+            "label": "Crimson (dark)",
+            "value": "#AA0000"
           },
           {
-            "label": "Red",
-            "value": "#E51400"
+            "label": "Orange (dark)",
+            "value": "#FF5500"
           },
           {
-            "label": "Magenta",
-            "value": "#FF0097"
+            "label": "Sienna (dark)",
+            "value": "#AA5500"
           },
           {
-            "label": "Pink",
-            "value": "#E671B8"
+            "label": "Emerald (dark)",
+            "value": "#00AA00"
           },
           {
-            "label": "Purple",
-            "value": "#7E3878"
+            "label": "Navy (dark)",
+            "value": "#0055AA"
           },
           {
-            "label": "Indigo",
-            "value": "#6A00FF"
+            "label": "Cobalt (dark)",
+            "value": "#0055FF"
           },
           {
-            "label": "Blue",
-            "value": "#0078D4"
+            "label": "Indigo (dark)",
+            "value": "#5500FF"
           },
           {
-            "label": "Teal",
-            "value": "#00ABA9"
-          },
-          {
-            "label": "Emerald",
-            "value": "#008A00"
-          },
-          {
-            "label": "Lime",
-            "value": "#8CBF26"
-          },
-          {
-            "label": "Brown",
-            "value": "#825A2C"
-          },
-          {
-            "label": "Steel",
-            "value": "#647687"
-          },
-          {
-            "label": "Cobalt",
-            "value": "#0050EF"
-          },
-          {
-            "label": "Violet",
+            "label": "Violet (dark)",
             "value": "#AA00FF"
           },
           {
-            "label": "Crimson",
-            "value": "#A20025"
+            "label": "Magenta (dark)",
+            "value": "#FF00AA"
+          },
+          {
+            "label": "Amber (light)",
+            "value": "#FFAA00"
+          },
+          {
+            "label": "Lime (light)",
+            "value": "#AAAA00"
+          },
+          {
+            "label": "Moss (light)",
+            "value": "#55AA00"
+          },
+          {
+            "label": "Teal (light)",
+            "value": "#00AAAA"
+          },
+          {
+            "label": "Sky (light)",
+            "value": "#00AAFF"
+          },
+          {
+            "label": "Pink (light)",
+            "value": "#FF55AA"
           }
         ]
       }

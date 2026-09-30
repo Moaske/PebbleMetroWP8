@@ -197,8 +197,13 @@
 static Window *s_window;
 static Layer  *s_canvas_layer;
 
+// Every redraw request goes through here. s_canvas_layer is NULL between
+// window_unload and the next window_load, and a timer or health event that
+// fires in that gap would otherwise dereference a freed pointer.
+static void mark_dirty(void);
+
 static GColor  s_accent;
-static uint8_t s_accent_r = 240, s_accent_g = 163, s_accent_b = 10; // WP Amber
+static uint8_t s_accent_r = 0x00, s_accent_g = 0x55, s_accent_b = 0xFF; // WP Cobalt
 
 static bool s_theme_light = false;
 static bool s_temp_unit_fahrenheit = false;
@@ -621,6 +626,17 @@ static void update_hrm_data(void) {
 // bytes per record) instead of allocating 17 KB in one go.
 #define HR_MINUTE_CHUNK 60
 
+// One shared scratch buffer rather than a local in each scanner.
+// sizeof(HealthMinuteData) is 12, so HR_MINUTE_CHUNK records is 720 bytes --
+// on Emery's 4 KB app stack that is nearly a fifth of it, and the resting
+// scan's copy would land there while the firmware's own
+// health_service_activities_iterate() frames are still below it, since
+// rest_hr_scan_range() runs from inside its callback.
+//
+// Safe to share: every caller runs on the app event loop, one at a time, and
+// no path has update_hr_average() and rest_hr_scan_range() live together.
+static HealthMinuteData s_hr_rec[HR_MINUTE_CHUNK];
+
 // From libpebble3 Health.kt / HealthConstants.kt.
 #define REST_HR_MIN_READINGS    10   // fewer qualifying minutes -> no figure
 #define REST_HR_LOWEST_MINUTES  5    // average of the N lowest
@@ -650,20 +666,19 @@ static void update_hr_average(void) {
   // your wrist repeatedly is exactly that case.
   if (now - s_hr_scanned < SECONDS_PER_MINUTE) return;
 
-  HealthMinuteData rec[HR_MINUTE_CHUNK];
   time_t before = s_hr_scanned;
 
   // Bounded so a long gap (watch off the wrist, app reinstalled) can't spin
   // here indefinitely. 32 chunks covers more than a full day.
   for (int pass = 0; pass < 32 && s_hr_scanned < now; pass++) {
     time_t from = s_hr_scanned, to = now;
-    uint32_t n = health_service_get_minute_history(rec, HR_MINUTE_CHUNK, &from, &to);
+    uint32_t n = health_service_get_minute_history(s_hr_rec, HR_MINUTE_CHUNK, &from, &to);
     // Zero records, or a window that didn't advance, means there is nothing
     // further recorded yet -- including the current, still-incomplete minute.
     if (n == 0 || to <= s_hr_scanned) break;
     for (uint32_t i = 0; i < n; i++) {
-      if (!rec[i].is_invalid && rec[i].heart_rate_bpm > 0) {
-        s_hr_sum += rec[i].heart_rate_bpm;
+      if (!s_hr_rec[i].is_invalid && s_hr_rec[i].heart_rate_bpm > 0) {
+        s_hr_sum += s_hr_rec[i].heart_rate_bpm;
         s_hr_count++;
       }
     }
@@ -706,14 +721,13 @@ static void rest_hr_add(RestHrAccum *a, int bpm) {
 }
 
 static void rest_hr_scan_range(RestHrAccum *a, time_t from, time_t to) {
-  HealthMinuteData rec[HR_MINUTE_CHUNK];
   for (int pass = 0; pass < 24 && from < to; pass++) {   // 24 h max per interval
     time_t s = from, e = to;
-    uint32_t n = health_service_get_minute_history(rec, HR_MINUTE_CHUNK, &s, &e);
+    uint32_t n = health_service_get_minute_history(s_hr_rec, HR_MINUTE_CHUNK, &s, &e);
     if (n == 0 || e <= from) break;
     for (uint32_t i = 0; i < n; i++) {
-      if (!rec[i].is_invalid && rec[i].heart_rate_bpm > 0) {
-        rest_hr_add(a, rec[i].heart_rate_bpm);
+      if (!s_hr_rec[i].is_invalid && s_hr_rec[i].heart_rate_bpm > 0) {
+        rest_hr_add(a, s_hr_rec[i].heart_rate_bpm);
       }
     }
     from = e;
@@ -745,7 +759,14 @@ static bool sleep_interval_cb(HealthActivity activity, time_t time_start,
 // another app.
 static void update_hr_resting(bool force) {
   time_t day = time_start_of_today();
-  if (!force && s_hr_rest_day == day && s_hr_rest > 0) return;
+  // Guard on the day we last ATTEMPTED, not on having a value. A night with
+  // too few readings to average legitimately produces nothing -- and if that
+  // only armed the guard on success, the whole flash scan would repeat on
+  // every relaunch for the rest of the day. A watchface is relaunched every
+  // time the user returns to it from another app, so that is not rare.
+  // Nothing is lost by skipping: HealthEventSleepUpdate passes force = true,
+  // which is precisely the signal that the underlying data changed.
+  if (!force && s_hr_rest_day == day) return;
 
   time_t search_start = day - SLEEP_WINDOW_BEFORE_SEC;
   time_t search_end   = day + SLEEP_WINDOW_AFTER_SEC;
@@ -759,13 +780,13 @@ static void update_hr_resting(bool force) {
                                     HealthIterationDirectionPast,
                                     sleep_interval_cb, &a);
 
+  s_hr_rest_day = day;            // attempted today, however it turned out
+  persist_write_int(PERSIST_HR_REST_DAY, (int32_t)s_hr_rest_day);
   if (a.total < REST_HR_MIN_READINGS || a.n <= 0) return;
   int sum = 0;
   for (int i = 0; i < a.n; i++) sum += a.lowest[i];
   s_hr_rest = (sum + a.n / 2) / a.n;                      // round half up
-  s_hr_rest_day = day;
   persist_write_int(PERSIST_HR_REST, s_hr_rest);
-  persist_write_int(PERSIST_HR_REST_DAY, (int32_t)s_hr_rest_day);
 }
 
 #else
@@ -1242,8 +1263,9 @@ static void draw_tile_content(GContext *ctx, TileId id, GRect r) {
                          GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
 
       tw = inner.size.w + px - left_margin - WEATHER_TX_OFFSET;   // borrow the padding back
-      snprintf(buf, sizeof(buf), "H%d\u00B0 L%d\u00B0%c",
-            display_temp(s_temp_high), display_temp(s_temp_low), temp_unit_char());
+      snprintf(buf, sizeof(buf), "%d\u00B0%c/%d\u00B0%c",
+               display_temp(s_temp_high), temp_unit_char(),
+               display_temp(s_temp_low),  temp_unit_char());
       GRect hl_r = GRect(tx, top + WEATHER_HL_Y_OFFSET, tw,
                          inner.size.h - (top + WEATHER_HL_Y_OFFSET - inner.origin.y));
       graphics_draw_text(ctx, buf, s_font_sb, hl_r,
@@ -1283,6 +1305,11 @@ static void canvas_update_proc(Layer *layer, GContext *ctx) {
                      GTextOverflowModeWordWrap, GTextAlignmentCenter, NULL);
 }
 
+// See the forward declaration beside s_canvas_layer.
+static void mark_dirty(void) {
+  if (s_canvas_layer) layer_mark_dirty(s_canvas_layer);
+}
+
 // ─── Flip animation ──────────────────────────────────────────────────────────
 // intptr_t, not int, for the void* round-trip: same size on Pebble's 32-bit
 // ARM targets but not guaranteed portable C, which is what tripped Basalt's
@@ -1292,13 +1319,13 @@ static void flip_end_callback(void *context) {
   s_tile_flipping[id] = false;
   s_flip_phase[id] = 0;
   s_flip_timer[id] = NULL;
-  layer_mark_dirty(s_canvas_layer);
+  mark_dirty();
 }
 
 static void flip_phase1_callback(void *context) {
   TileId id = (TileId)(intptr_t)context;
   s_flip_phase[id] = 2;
-  layer_mark_dirty(s_canvas_layer);
+  mark_dirty();
   s_flip_timer[id] = app_timer_register(FLIP_DURATION_MS, flip_end_callback, context);
 }
 
@@ -1306,7 +1333,7 @@ static void start_flip(TileId id) {
   if (s_tile_flipping[id]) return;
   s_tile_flipping[id] = true;
   s_flip_phase[id] = 1;
-  layer_mark_dirty(s_canvas_layer);
+  mark_dirty();
   s_flip_timer[id] = app_timer_register(FLIP_DURATION_MS, flip_phase1_callback,
                                         (void*)(intptr_t)id);
 }
@@ -1358,11 +1385,11 @@ static void hr_prime_callback(void *context) {
   s_hr_prime_timer = NULL;
   update_hr_average();
   update_hr_resting(false);
-  layer_mark_dirty(s_canvas_layer);
+  mark_dirty();
 }
 
 static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
-  layer_mark_dirty(s_canvas_layer);
+  mark_dirty();
 }
 
 // ─── AppMessage ──────────────────────────────────────────────────────────────
@@ -1455,7 +1482,7 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
   if ((t = dict_find(iter, KEY_PHONE_BATTERY)))  s_phone_battery = t->value->int32;
   if ((t = dict_find(iter, KEY_PHONE_CHARGING))) s_phone_charging = (t->value->int32 == 1);
 
-  layer_mark_dirty(s_canvas_layer);
+  mark_dirty();
 }
 
 static void health_handler(HealthEventType event, void *context) {
@@ -1479,11 +1506,18 @@ static void health_handler(HealthEventType event, void *context) {
       update_sleep_data();
       update_hrm_data();
       update_hr_average();
-      update_hr_resting(true);
+      // NOT force. health_service_events_subscribe() synthesises a
+      // SignificantUpdate on every subscribe, so this arm runs on every single
+      // launch -- and a watchface relaunches each time the user comes back to
+      // it. Forcing here re-ran the full sleep-minute flash scan every time,
+      // stepping straight over the day cache and the deferral in init() that
+      // exist precisely to stop that. SleepUpdate above is the event that
+      // actually means the sleep data changed.
+      update_hr_resting(false);
       break;
     default: break;
   }
-  layer_mark_dirty(s_canvas_layer);
+  mark_dirty();
 }
 
 // ─── Window lifecycle ────────────────────────────────────────────────────────
@@ -1518,6 +1552,7 @@ static void window_load(Window *window) {
 
 static void window_unload(Window *window) {
   layer_destroy(s_canvas_layer);
+  s_canvas_layer = NULL;   // any timer/event callback that still fires must not deref it
   fonts_unload_custom_font(s_font_time);
   fonts_unload_custom_font(s_font_med);
   fonts_unload_custom_font(s_font_sm);

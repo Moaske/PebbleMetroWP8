@@ -24,6 +24,36 @@ var clay = new Clay(clayConfig, customClay, { autoHandleEvents: false });
 // How often to refresh weather/AQI while the watchface is active, in ms.
 var REFRESH_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
 
+// ─── Launch-time fetch throttle ──────────────────────────────────────────────
+// PKJS is torn down and restarted every time the watchface launches, and a
+// watchface relaunches every single time the user returns to it from another
+// app. So the setInterval timers in the 'ready' handler are reset constantly
+// and -- for anyone who glances at their watch more often than the interval --
+// never fire at all, leaving the launch itself as the only thing that ever
+// fetches. Five glances in a minute meant five weather calls, five AQI calls,
+// five reverse-geocodes and five CSV downloads, every one of them over
+// Bluetooth.
+//
+// localStorage survives that restart (it is already how savedSetting() reads
+// Clay's settings back), so a timestamp there is enough to tell a genuine
+// refresh from a redundant one. Stamps are written only on SUCCESS, so a
+// failed fetch is retried on the next launch rather than suppressed.
+var STAMP_WEATHER  = 'mt_last_weather';
+var STAMP_WEEK_CSV = 'mt_last_weekcsv';
+
+function fetchedRecently(key, ttlMs) {
+  try {
+    var t = parseInt(localStorage.getItem(key), 10);
+    return !!t && (Date.now() - t) < ttlMs;
+  } catch (e) {
+    return false;        // no storage available -> behave exactly as before
+  }
+}
+
+function markFetched(key) {
+  try { localStorage.setItem(key, String(Date.now())); } catch (e) {}
+}
+
 // ─── Week-number CSV ─────────────────────────────────────────────────────────
 // The whole school year crosses to the watch in one go, not just the current
 // week: the watch then formats the tile itself from its own ISO week number
@@ -69,22 +99,6 @@ function wmoToIconIndex(code) {
   if (code >= 95 && code <= 96)     return 11; // thunderstorm
   if (code >= 97 && code <= 99)     return 12; // thunderstorm + hail
   return 2; // default: partly cloudy
-}
-
-// ─── "2026-09-11T07:14" -> minutes since local midnight ──────────────────────
-// Parsed by string, not via Date(): the timestamp Open-Meteo returns is
-// already in the location's local time (timezone=auto), and feeding it to
-// Date() would have it re-interpreted against the PHONE's timezone, which
-// silently breaks whenever the two differ.
-function isoLocalToMinutes(iso) {
-  if (!iso) return -1;
-  var t = iso.split('T')[1];
-  if (!t) return -1;
-  var parts = t.split(':');
-  var h = parseInt(parts[0], 10);
-  var m = parseInt(parts[1], 10);
-  if (isNaN(h) || isNaN(m)) return -1;
-  return h * 60 + m;
 }
 
 // ─── Hex colour → R,G,B 0–255 ────────────────────────────────────────────────
@@ -176,11 +190,6 @@ function fetchWeatherAndAQI(lat, lon) {
         var tempCurrent = Math.round(data.current.temperature_2m);
         var iconIdx    = wmoToIconIndex(wmoCurrent);
 
-        // Day/night icon choice is made ON THE WATCH, not here: weather only
-        // refreshes every 30 min, so baking it in would leave the icon wrong
-        // for up to half an hour after sunset.
-        var sunriseMin = isoLocalToMinutes(data.daily.sunrise[0]);
-        var sunsetMin  = isoLocalToMinutes(data.daily.sunset[0]);
         // UV sent as index*10 to keep one decimal using plain integers.
         var uvX10      = (data.current.uv_index != null) ? Math.round(data.current.uv_index * 10) : -1;
         var windSpeed  = (data.current.wind_speed_10m != null) ? Math.round(data.current.wind_speed_10m) : -1;
@@ -210,10 +219,9 @@ function fetchWeatherAndAQI(lat, lon) {
         if (windSpeed  >= 0) msg[messageKeys.WIND_SPEED]  = windSpeed;
         if (windDir    >= 0) msg[messageKeys.WIND_DIR]    = windDir;
         if (precipProb >= 0) msg[messageKeys.PRECIP_PROB] = precipProb;
-        if (sunriseMin >= 0) msg[messageKeys.SUNRISE_MIN] = sunriseMin;
-        if (sunsetMin  >= 0) msg[messageKeys.SUNSET_MIN]  = sunsetMin;
 
         Pebble.sendAppMessage(msg, function() {
+          markFetched(STAMP_WEATHER);
           console.log('Weather sent: wmoCurrent=' + wmoCurrent + ' wmoDaily=' + wmoDaily +
                       ' icon=' + iconIdx + ' cur=' + tempCurrent + ' H=' + tempHigh + ' L=' + tempLow +
                       ' sunrise=' + sunriseMin + ' sunset=' + sunsetMin);
@@ -491,6 +499,7 @@ function refreshWeekTable() {
       var msg = {};
       msg[messageKeys.WEEK_TABLE] = buf;
       Pebble.sendAppMessage(msg, function() {
+        markFetched(STAMP_WEEK_CSV);
         console.log('Week table sent: ' + buf.length + ' bytes');
       }, function(e) {
         console.log('Week table send failed: ' + JSON.stringify(e));
@@ -513,10 +522,28 @@ Pebble.addEventListener('ready', function() {
   // No accent send here — the watch already persists its own last-known
   // accent/theme in Pebble persistent storage, so nothing to resend on a
   // normal launch. Only weather/AQI need fetching from the phone.
-  refreshWeather();
+  // Launch-time fetches are guarded; the intervals below are not, so a long
+  // uninterrupted session still refreshes on schedule. See the note beside
+  // fetchedRecently().
+  if (fetchedRecently(STAMP_WEATHER, REFRESH_INTERVAL_MS)) {
+    console.log('Weather: last fetch still fresh, skipping launch fetch');
+  } else {
+    refreshWeather();
+  }
   setInterval(refreshWeather, REFRESH_INTERVAL_MS);
-  refreshWeekTable();
+
+  // Skipping this costs nothing at all: the watch persists the table itself
+  // (PERSIST_WEEK_TABLE) and restores it in init(), so it already has the
+  // labels before the phone says a word. Only a genuinely newer CSV matters,
+  // and that is what the TTL is for -- plus webviewclosed, which refetches
+  // unconditionally whenever the settings change.
+  if (fetchedRecently(STAMP_WEEK_CSV, WEEK_CSV_INTERVAL_MS)) {
+    console.log('Week CSV: last fetch still fresh, skipping (watch has it persisted)');
+  } else {
+    refreshWeekTable();
+  }
   setInterval(refreshWeekTable, WEEK_CSV_INTERVAL_MS);
+
   initPhoneBattery();
 });
 
@@ -582,6 +609,9 @@ Pebble.addEventListener('webviewclosed', function(e) {
     console.log('Settings send failed: ' + JSON.stringify(err));
   });
 
-  refreshWeather();
+  // Nothing in the settings page changes what the weather fetch returns: the
+  // request reads no setting, and unit/format conversion all happens on the
+  // watch. So this only needs to run when the data has genuinely aged out.
+  if (!fetchedRecently(STAMP_WEATHER, REFRESH_INTERVAL_MS)) refreshWeather();
   refreshWeekTable();   // picks up a changed URL, or a freshly enabled CSV
 });

@@ -143,7 +143,20 @@ module.exports = function(minified) {
     '.mtprev-wthr-low { font-family:"Segoe UI",Arial,sans-serif; font-size:14px; font-weight:300; opacity:0.75; line-height:1; }' +
     '#mtprev-t-slot-b .mtprev-face, #mtprev-t-slot-c .mtprev-face { justify-content:space-between; }' +
     '#mtprev-t-slot-d .mtprev-face { justify-content:space-between; }' +
-    '.mtprev-icon { font-family:"MetroIcons"; font-size:20px; opacity:0.9; line-height:1; text-align:center; }' +
+    // Template 1 centres its icon across the WHOLE tile on the watch:
+    // draw_template_single() centres it in `inner`, and `inner` is the tile
+    // inset by TILE_PAD_X on both sides, so its centre is the tile's centre.
+    //
+    // Two things were stopping that here. The span's parent is the injected
+    // #mtprev-face-* div, not .mtprev-face itself, so it is an ordinary inline
+    // box rather than a flex item -- it shrink-wraps to the glyph, and
+    // text-align has nothing left to centre. And .mtprev-face's padding is
+    // deliberately lopsided (7px left, 2px right) so the value line can borrow
+    // the right-hand padding back, which would offset a centred icon by 2.5px.
+    // display:block fixes the first; the negative margins undo the second by
+    // spanning the padding, and must stay in step with it.
+    '.mtprev-icon { font-family:"MetroIcons"; font-size:20px; opacity:0.9; line-height:1;' +
+      ' display:block; margin:0 -2px 0 -7px; text-align:center; }' +
     '.mtprev-nav-arrow { position:absolute; bottom:7px; right:9px; width:14px; height:14px; }' +
     '.mtprev-nav-arrow svg polygon { fill:#fff; }' +
     '.mtprev-shell.mtprev-light .mtprev-nav-arrow svg polygon { fill:#000; }' +
@@ -299,6 +312,65 @@ module.exports = function(minified) {
 
     var accentItem = clayConfig.getItemByMessageKey('accent_color');
     var themeItem  = clayConfig.getItemByMessageKey('theme_select');
+
+    // ─── Carry a pre-Pebble-64 accent across ──────────────────────────────────
+    // Before this version the options were true Windows Phone hexes, which the
+    // watch rounded down to its own 64-colour grid: #7E3878 arrived as #550055,
+    // #825A2C as #AA5500. None of those old strings match an option any more, so
+    // a <select> left alone would quietly drop back to the default and the user
+    // would lose their colour the first time they opened settings.
+    //
+    // Applying the watch's own rounding (GColorFromRGBA truncates each channel
+    // with >> 6) to the saved value lands it exactly on one of the new options,
+    // because the new options ARE the grid. So the picker comes up showing the
+    // colour the watch has been displaying all along.
+    //
+    // item.get() is no help here -- the select has already fallen back -- so the
+    // raw value is read from Clay's own localStorage copy, the same place
+    // index.js reads it from.
+    function migrateAccent() {
+      if (!accentItem) return;
+      var raw;
+      try {
+        var s = JSON.parse(localStorage.getItem('clay-settings')) || {};
+        raw = s[accentItem.messageKey] || s.accent_color;
+      } catch (e) { return; }
+      if (typeof raw !== 'string' || !/^#?[0-9a-f]{6}$/i.test(raw)) return;
+
+      var h = raw.replace('#', '');
+      var q = '#';
+      for (var i = 0; i < 6; i += 2) {
+        // >> 6 picks the level; 0x55 * level reproduces what the display shows.
+        q += ('0' + (0x55 * (parseInt(h.substr(i, 2), 16) >> 6)).toString(16))
+               .slice(-2).toUpperCase();
+      }
+      if (q === ('#' + h.toUpperCase())) return;         // already exact, nothing to do
+
+      // Rounding lands on the grid, but the 16 offered are only part of that
+      // grid: old Purple rounds to #550055 and old Steel to #5555AA, neither of
+      // which is on the list. Setting a <select> to a value it has no option for
+      // shows nothing at all, so fall back to the nearest colour that IS offered.
+      // The list is read off the element rather than repeated here, so it cannot
+      // drift out of step with config.json.
+      var el = accentItem.$element;
+      var sel = el && (el[0] ? el[0].querySelector('select') : el.querySelector('select'));
+      if (!sel) return;
+      var best = null, bestD = Infinity;
+      for (var o = 0; o < sel.options.length; o++) {
+        var ov = sel.options[o].value;
+        if (!/^#[0-9a-f]{6}$/i.test(ov)) continue;
+        if (ov.toUpperCase() === q) { best = ov; bestD = 0; break; }
+        var d = 0;
+        for (var k = 1; k < 7; k += 2) {
+          var diff = parseInt(ov.substr(k, 2), 16) - parseInt(q.substr(k, 2), 16);
+          d += diff * diff;
+        }
+        if (d < bestD) { bestD = d; best = ov; }
+      }
+      if (best) { try { accentItem.set(best); } catch (e) {} }
+    }
+    migrateAccent();
+
     if (accentItem) accentItem.on('change', applyPreviewState);
     if (themeItem)  themeItem.on('change', applyPreviewState);
     applyPreviewState();
