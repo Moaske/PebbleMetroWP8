@@ -142,7 +142,7 @@
 #define KEY_WEEK_REF_DN  MESSAGE_KEY_WEEK_REF_DN  // offset-week start, days since 1970-01-01
 #define KEY_WEEK_SRC     MESSAGE_KEY_WEEK_SRC     // 0 = start date, 1 = CSV table
 #define KEY_WEEK_TABLE   MESSAGE_KEY_WEEK_TABLE   // packed school-year table
-#define KEY_WIND_UNIT    MESSAGE_KEY_WIND_UNIT     // 0 = km/h, 1 = mph
+#define KEY_WIND_UNIT    MESSAGE_KEY_WIND_UNIT     // WindUnit below
 #define KEY_OZONE        MESSAGE_KEY_OZONE          // ug/m3
 #define KEY_THEME        MESSAGE_KEY_THEME
 #define KEY_TEMP_UNIT    MESSAGE_KEY_TEMP_UNIT
@@ -203,12 +203,23 @@ static Layer  *s_canvas_layer;
 static void mark_dirty(void);
 
 static GColor  s_accent;
-static uint8_t s_accent_r = 0x00, s_accent_g = 0x55, s_accent_b = 0xFF; // WP Cobalt
+// Must match config.json's accent_color defaultValue, or a fresh install shows
+// one colour until the user first opens settings. Indigo #5500FF, an exact
+// Pebble-64 value, so GColorFromRGB() leaves it alone.
+static uint8_t s_accent_r = 0x55, s_accent_g = 0x00, s_accent_b = 0xFF;
 
 static bool s_theme_light = false;
 static bool s_temp_unit_fahrenheit = false;
 static bool s_date_order_mdy = false;
-static bool s_wind_unit_mph  = false;  // false = km/h (what Open-Meteo returns)
+// Three-way now, so no longer a bool. The numbering is wire format: it is what
+// the phone sends and what PERSIST_WIND_UNIT holds, and 0/1 keep the meaning the
+// old bool had, so a setting saved by an earlier version still reads correctly.
+typedef enum {
+  WIND_UNIT_KMH = 0,   // what Open-Meteo returns
+  WIND_UNIT_MPH = 1,
+  WIND_UNIT_BFT = 2,
+} WindUnit;
+static WindUnit s_wind_unit = WIND_UNIT_KMH;
 
 static int  s_aqi          = 0;
 static int  s_wmo_icon     = 0;
@@ -820,11 +831,33 @@ static char temp_unit_char(void) { return s_temp_unit_fahrenheit ? 'F' : 'C'; }
 
 // Wind always arrives in km/h; convert at draw time so a unit change needs
 // no refetch. Integer maths: 0.621371 mph per km/h, rounded.
-static int display_wind(int kmh) {
-  if (!s_wind_unit_mph) return kmh;
-  return (kmh * 6214 + 5000) / 10000;
+// Beaufort force from km/h, WMO scale. The table is the INCLUSIVE upper bound of
+// each force in km/h: force 0 is dead calm (under 1 km/h) and so tops out at 0
+// once the speed is a whole number, force 1 is 1-5, and anything past 117 is a
+// hurricane-force 12.
+static int kmh_to_beaufort(int kmh) {
+  static const int bft_max_kmh[12] = { 0, 5, 11, 19, 28, 38, 49, 61, 74, 88, 102, 117 };
+  for (int b = 0; b < 12; b++) {
+    if (kmh <= bft_max_kmh[b]) return b;
+  }
+  return 12;
 }
-static const char *wind_unit_str(void) { return s_wind_unit_mph ? "mph" : "km/h"; }
+
+static int display_wind(int kmh) {
+  switch (s_wind_unit) {
+    // 0.621371 mph per km/h, in integer maths, rounded.
+    case WIND_UNIT_MPH: return (kmh * 6214 + 5000) / 10000;
+    case WIND_UNIT_BFT: return kmh_to_beaufort(kmh);
+    default:            return kmh;
+  }
+}
+static const char *wind_unit_str(void) {
+  switch (s_wind_unit) {
+    case WIND_UNIT_MPH: return "mph";
+    case WIND_UNIT_BFT: return "bft";
+    default:            return "km/h";
+  }
+}
 
 // ─── Wind direction arrow ────────────────────────────────────────────────────
 // graphics_draw_text cannot rotate a glyph -- Pebble has no text rotation API
@@ -1422,8 +1455,12 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
     persist_write_int(PERSIST_DATE_ORDER, t->value->int32);
   }
   if ((t = dict_find(iter, KEY_WIND_UNIT))) {
-    s_wind_unit_mph = (t->value->int32 == 1);
-    persist_write_int(PERSIST_WIND_UNIT, t->value->int32);
+    int32_t v = t->value->int32;
+    // Clamped rather than trusted: an out-of-range value would fall through
+    // every switch arm below and silently read as km/h anyway, so say so here.
+    if (v < WIND_UNIT_KMH || v > WIND_UNIT_BFT) v = WIND_UNIT_KMH;
+    s_wind_unit = (WindUnit)v;
+    persist_write_int(PERSIST_WIND_UNIT, v);
   }
   if ((t = dict_find(iter, KEY_WEEK_REF_DN))) {
     s_week_ref_dn = (long)t->value->int32;
@@ -1577,7 +1614,11 @@ static void init(void) {
   if (persist_exists(PERSIST_THEME))      s_theme_light = (persist_read_int(PERSIST_THEME) == 1);
   if (persist_exists(PERSIST_TEMP_UNIT))  s_temp_unit_fahrenheit = (persist_read_int(PERSIST_TEMP_UNIT) == 1);
   if (persist_exists(PERSIST_DATE_ORDER)) s_date_order_mdy = (persist_read_int(PERSIST_DATE_ORDER) == 1);
-  if (persist_exists(PERSIST_WIND_UNIT))  s_wind_unit_mph = (persist_read_int(PERSIST_WIND_UNIT) == 1);
+  if (persist_exists(PERSIST_WIND_UNIT)) {
+    int32_t v = persist_read_int(PERSIST_WIND_UNIT);
+    if (v < WIND_UNIT_KMH || v > WIND_UNIT_BFT) v = WIND_UNIT_KMH;
+    s_wind_unit = (WindUnit)v;
+  }
   if (persist_exists(PERSIST_WEEK_REF_DN)) s_week_ref_dn = (long)persist_read_int(PERSIST_WEEK_REF_DN);
   if (persist_exists(PERSIST_WEEK_SRC))   s_week_use_csv = (persist_read_int(PERSIST_WEEK_SRC) == 1);
   if (persist_exists(PERSIST_WEEK_TABLE)) {

@@ -332,40 +332,59 @@ module.exports = function(minified) {
       if (!accentItem) return;
       var raw;
       try {
-        var s = JSON.parse(localStorage.getItem('clay-settings')) || {};
-        raw = s[accentItem.messageKey] || s.accent_color;
+        var st = JSON.parse(localStorage.getItem('clay-settings')) || {};
+        raw = st[accentItem.messageKey] || st.accent_color;
       } catch (e) { return; }
       if (typeof raw !== 'string' || !/^#?[0-9a-f]{6}$/i.test(raw)) return;
+      var have = '#' + raw.replace('#', '').toUpperCase();
 
-      var h = raw.replace('#', '');
-      var q = '#';
-      for (var i = 0; i < 6; i += 2) {
-        // >> 6 picks the level; 0x55 * level reproduces what the display shows.
-        q += ('0' + (0x55 * (parseInt(h.substr(i, 2), 16) >> 6)).toString(16))
-               .slice(-2).toUpperCase();
-      }
-      if (q === ('#' + h.toUpperCase())) return;         // already exact, nothing to do
-
-      // Rounding lands on the grid, but the 16 offered are only part of that
-      // grid: old Purple rounds to #550055 and old Steel to #5555AA, neither of
-      // which is on the list. Setting a <select> to a value it has no option for
-      // shows nothing at all, so fall back to the nearest colour that IS offered.
       // The list is read off the element rather than repeated here, so it cannot
       // drift out of step with config.json.
       var el = accentItem.$element;
       var sel = el && (el[0] ? el[0].querySelector('select') : el.querySelector('select'));
       if (!sel) return;
-      var best = null, bestD = Infinity;
+      var opts = [];
       for (var o = 0; o < sel.options.length; o++) {
         var ov = sel.options[o].value;
-        if (!/^#[0-9a-f]{6}$/i.test(ov)) continue;
-        if (ov.toUpperCase() === q) { best = ov; bestD = 0; break; }
-        var d = 0;
-        for (var k = 1; k < 7; k += 2) {
-          var diff = parseInt(ov.substr(k, 2), 16) - parseInt(q.substr(k, 2), 16);
-          d += diff * diff;
-        }
-        if (d < bestD) { bestD = d; best = ov; }
+        if (/^#[0-9a-f]{6}$/i.test(ov)) opts.push(ov.toUpperCase());
+      }
+      if (opts.indexOf(have) !== -1) return;   // offered as-is, nothing to do
+
+      // Two separate reasons a saved value may not be offered, and both land here.
+      //
+      // It may be off-grid: before the Pebble-64 palette the options were true
+      // Windows Phone hexes, which the watch rounded down with >> 6 per channel
+      // (#7E3878 arrived as #550055). Applying that same rounding recovers the
+      // colour the watch was actually showing.
+      //
+      // Or it may be exact but dropped: this release removes Cobalt #0055FF --
+      // which was the default -- and Violet #AA00FF. Rounding does nothing for
+      // those, so the nearest offered colour is the answer.
+      //
+      // Either way a <select> set to a value it has no option for renders as
+      // nothing and silently resets the user to the default, so always land on
+      // something real.
+      var q = '#';
+      for (var i = 1; i < 7; i += 2) {
+        q += ('0' + (0x55 * (parseInt(have.substr(i, 2), 16) >> 6)).toString(16))
+               .slice(-2).toUpperCase();
+      }
+      if (opts.indexOf(q) !== -1) { try { accentItem.set(q); } catch (e) {} return; }
+
+      // Nearest offered. Plain RGB distance ties too often to be useful here --
+      // Violet is equidistant from Indigo and Purple, Cobalt from Indigo and
+      // Navy -- and breaks those ties by list order, which throws the hue away.
+      // This is the "redmean" weighting, scaled by 256 to stay in integers; it
+      // keeps Violet on Purple and Cobalt on Navy.
+      function chan(hex, i) { return parseInt(hex.substr(i, 2), 16); }
+      var best = null, bestD = Infinity;
+      for (var k = 0; k < opts.length; k++) {
+        var dR = chan(opts[k], 1) - chan(q, 1);
+        var dG = chan(opts[k], 3) - chan(q, 3);
+        var dB = chan(opts[k], 5) - chan(q, 5);
+        var rbar = (chan(opts[k], 1) + chan(q, 1)) >> 1;
+        var d = (512 + rbar) * dR * dR + 1024 * dG * dG + (767 - rbar) * dB * dB;
+        if (d < bestD) { bestD = d; best = opts[k]; }
       }
       if (best) { try { accentItem.set(best); } catch (e) {} }
     }
@@ -401,6 +420,38 @@ module.exports = function(minified) {
       return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     }
 
+    // ─── Wind sample follows the unit selector ──────────────────────────────
+    // The arithmetic is lifted from display_wind()/kmh_to_beaufort() in main.c
+    // rather than approximated, so the preview reads exactly what the watch
+    // would: integer mph, and Beaufort off the WMO table of inclusive km/h
+    // upper bounds. 12 km/h is the sample, so mph shows 7 and Beaufort 3.
+    var WIND_SAMPLE_KMH = 12;
+
+    function windSample() {
+      var it = clayConfig.getItemByMessageKey('wind_unit_select');
+      var unit = it ? it.get() : 'kmh';
+      if (unit === 'mph') {
+        return Math.floor((WIND_SAMPLE_KMH * 6214 + 5000) / 10000) + ' mph';
+      }
+      if (unit === 'bft') {
+        var maxKmh = [0, 5, 11, 19, 28, 38, 49, 61, 74, 88, 102, 117];
+        for (var b = 0; b < 12; b++) {
+          if (WIND_SAMPLE_KMH <= maxKmh[b]) return b + ' bft';
+        }
+        return '12 bft';
+      }
+      return WIND_SAMPLE_KMH + ' km/h';
+    }
+
+    // Found by label rather than by index: TILE_CONTENT is indexed by ContentId
+    // and only ever appended to, but an index hard-coded here would still be a
+    // second place to remember on the next append.
+    function refreshWindSample() {
+      for (var i = 0; i < TILE_CONTENT.length; i++) {
+        if (TILE_CONTENT[i].t === 'WIND') { TILE_CONTENT[i].v = windSample(); return; }
+      }
+    }
+
     function renderFace(el, c) {
       if (!el) return;
       if (c.dual) {
@@ -419,6 +470,7 @@ module.exports = function(minified) {
     }
 
     function applyTileSlot(slot) {
+      refreshWindSample();
       var item = clayConfig.getItemByMessageKey(slot.key);
       var idx = item ? parseInt(item.get(), 10) : slot.dflt;
       if (isNaN(idx) || idx < 0 || idx >= TILE_CONTENT.length) idx = slot.dflt;
@@ -441,6 +493,15 @@ module.exports = function(minified) {
       if (item) item.on('change', function() { applyTileSlot(slot); });
       applyTileSlot(slot);
     });
+
+    // A unit change rewrites the sample, so every slot has to be redrawn --
+    // the wind tile may be sitting in any of the four, or in none.
+    var windUnitItem = clayConfig.getItemByMessageKey('wind_unit_select');
+    if (windUnitItem) {
+      windUnitItem.on('change', function() {
+        TILE_SLOTS.forEach(function(slot) { applyTileSlot(slot); });
+      });
+    }
 
     // Keep the clock ticking so the preview doesn't look frozen/dead.
     function tick() {

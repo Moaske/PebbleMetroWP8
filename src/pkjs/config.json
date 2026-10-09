@@ -18,26 +18,26 @@
         "type": "select",
         "messageKey": "accent_color",
         "label": "Tile colour",
-        "defaultValue": "#0055FF",
+        "defaultValue": "#5500FF",
         "options": [
           {
             "label": "Red (dark)",
-            "value": "#FF0000"
-          },
-          {
-            "label": "Crimson (dark)",
             "value": "#AA0000"
           },
           {
+            "label": "Brick (dark)",
+            "value": "#550000"
+          },
+          {
             "label": "Orange (dark)",
-            "value": "#FF5500"
+            "value": "#FF0000"
           },
           {
             "label": "Sienna (dark)",
             "value": "#AA5500"
           },
           {
-            "label": "Emerald (dark)",
+            "label": "Apple (dark)",
             "value": "#00AA00"
           },
           {
@@ -45,16 +45,16 @@
             "value": "#0055AA"
           },
           {
-            "label": "Cobalt (dark)",
-            "value": "#0055FF"
+            "label": "Emerald (dark)",
+            "value": "#005500"
           },
           {
             "label": "Indigo (dark)",
             "value": "#5500FF"
           },
           {
-            "label": "Violet (dark)",
-            "value": "#AA00FF"
+            "label": "Purple (dark)",
+            "value": "#550055"
           },
           {
             "label": "Magenta (dark)",
@@ -438,7 +438,7 @@
         ]
       },
       {
-        "type": "radiogroup",
+        "type": "select",
         "messageKey": "wind_unit_select",
         "label": "Wind speed",
         "defaultValue": "kmh",
@@ -450,6 +450,10 @@
           {
             "label": "mph",
             "value": "mph"
+          },
+          {
+            "label": "Beaufort (bft)",
+            "value": "bft"
           }
         ]
       }

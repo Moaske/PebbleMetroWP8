@@ -579,7 +579,7 @@ Pebble.addEventListener('webviewclosed', function(e) {
   var tileD     = intSetting(messageKeys.tile_d_select, 12);
   var useCsv    = !!settings[messageKeys.week_use_csv];
   var weekRefDn = dateToDayNumber(settings[messageKeys.week_ref_date]);
-  var windUnit  = settings[messageKeys.wind_unit_select];   // 'kmh' or 'mph'
+  var windUnit  = settings[messageKeys.wind_unit_select];   // 'kmh', 'mph' or 'bft'
 
   var msg = {};
   msg[messageKeys.ACCENT_R] = rgb.r;
@@ -592,7 +592,8 @@ Pebble.addEventListener('webviewclosed', function(e) {
   msg[messageKeys.TILE_B]     = tileB;
   msg[messageKeys.TILE_C]     = tileC;
   msg[messageKeys.TILE_D]     = tileD;
-  msg[messageKeys.WIND_UNIT]  = (windUnit === 'mph') ? 1 : 0;
+  // Must stay in step with WindUnit in main.c: 0 km/h, 1 mph, 2 Beaufort.
+  msg[messageKeys.WIND_UNIT]  = (windUnit === 'mph') ? 1 : (windUnit === 'bft') ? 2 : 0;
   // Only one offset source is live at a time. Sending WEEK_SRC lets the watch
   // fall back to the date calculation the moment the toggle goes off, without
   // having to clear the stored table.
