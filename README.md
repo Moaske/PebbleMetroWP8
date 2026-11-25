@@ -1,9 +1,9 @@
 # Pebble Metro WP8
 Retro Windows Phone 8 Metro style watchface.
 For Pebble Time 2, Time and Time Steel (Emery & Basalt).<br>
-Current version: 1.6.8  |  https://apps.repebble.com/metro-wp8_b406d87ebcd144ff9cd278a3
+Current version: 2.0.0  |  https://apps.repebble.com/metro-wp8_b406d87ebcd144ff9cd278a3
 
-## NEW! Selectable Live Tiles.
+## Selectable Live Tiles.
 Select any of below Tile types for slots 3, 5, 6 and 7. Available Tiles:
 - Air quality
 - Daily steps
@@ -20,7 +20,10 @@ This tile will append the first character of the Info column to the custom week-
 - UV/Smog (bare UV number & Ozone (O3) reading)
 - Battery (watch AND phone! (shows CHR when phone charging))
 
-And more to come.
+Select any of these tiles for the Wide Tile. Available tiles:
+- Calendar
+- Music
+- Weather
 
 ## Features
 - Clock tile (follows watch settings for 12/24h) and weekday/date tile.
