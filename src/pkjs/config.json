@@ -4,6 +4,14 @@
     "defaultValue": "Metro WP8 Settings"
   },
   {
+    "type": "text",
+    "defaultValue": "For the full set of tiles — air quality, UV/smog and pollen — install the <a href=\"https://apps.repebble.com/openmeteo_13d06d4a933e4bbab47c8756\" id=\"mt-om-link\">OpenMeteo plugin</a>."
+  },
+  {
+    "type": "text",
+    "defaultValue": "And don't forget to save at the bottom of the screen!"
+  },
+  {
     "type": "section",
     "items": [
       {
@@ -118,11 +126,11 @@
     "items": [
       {
         "type": "heading",
-        "defaultValue": "Live Tile picker"
+        "defaultValue": "Square Tile picker"
       },
       {
         "type": "text",
-        "defaultValue": "Pick what each of the four outlined tiles shows. Time, date and weather are fixed. Some tiles have additional settings further down this screen."
+        "defaultValue": "The time and date tiles are fixed; the wide tile has its own section below. Some tiles have additional settings further down this screen."
       },
       {
         "type": "select",
@@ -135,60 +143,68 @@
             "value": "0"
           },
           {
-            "label": "Steps",
-            "value": "1"
-          },
-          {
-            "label": "Sleep",
-            "value": "2"
-          },
-          {
-            "label": "Moon phase",
-            "value": "3"
-          },
-          {
-            "label": "Rain",
-            "value": "4"
-          },
-          {
-            "label": "Heart rate (average)",
-            "value": "5"
+            "label": "Battery",
+            "value": "12"
           },
           {
             "label": "Calories",
             "value": "6"
           },
           {
-            "label": "Week numbers",
-            "value": "7"
+            "label": "Heart rate (average)",
+            "value": "5"
           },
           {
-            "label": "Sunrise/sunset",
-            "value": "8"
-          },
-          {
-            "label": "Wind",
-            "value": "9"
-          },
-          {
-            "label": "UV index",
-            "value": "10"
-          },
-          {
-            "label": "UV / Smog",
-            "value": "11"
-          },
-          {
-            "label": "Battery",
-            "value": "12"
+            "label": "Heart rate (current/resting)",
+            "value": "14"
           },
           {
             "label": "Heart rate (resting)",
             "value": "13"
           },
           {
-            "label": "Heart rate (current/resting)",
-            "value": "14"
+            "label": "Moon phase",
+            "value": "3"
+          },
+          {
+            "label": "Pollen",
+            "value": "16"
+          },
+          {
+            "label": "Rain",
+            "value": "4"
+          },
+          {
+            "label": "Sleep",
+            "value": "2"
+          },
+          {
+            "label": "Steps",
+            "value": "1"
+          },
+          {
+            "label": "Sunrise/sunset",
+            "value": "8"
+          },
+          {
+            "label": "UV / Smog",
+            "value": "11"
+          },
+          {
+            "label": "UV index",
+            "value": "10"
+          },
+          {
+            "label": "Weather",
+            "value": "15"
+          },
+          {
+            "label": "Week numbers",
+            "value": "7"
+          },
+          {
+            "label": "Wind",
+            "value": "9"
           }
         ]
       },
@@ -203,60 +219,68 @@
             "value": "0"
           },
           {
-            "label": "Steps",
-            "value": "1"
-          },
-          {
-            "label": "Sleep",
-            "value": "2"
-          },
-          {
-            "label": "Moon phase",
-            "value": "3"
-          },
-          {
-            "label": "Rain",
-            "value": "4"
-          },
-          {
-            "label": "Heart rate (average)",
-            "value": "5"
+            "label": "Battery",
+            "value": "12"
           },
           {
             "label": "Calories",
             "value": "6"
           },
           {
-            "label": "Week numbers",
-            "value": "7"
+            "label": "Heart rate (average)",
+            "value": "5"
           },
           {
-            "label": "Sunrise/sunset",
-            "value": "8"
-          },
-          {
-            "label": "Wind",
-            "value": "9"
-          },
-          {
-            "label": "UV index",
-            "value": "10"
-          },
-          {
-            "label": "UV / Smog",
-            "value": "11"
-          },
-          {
-            "label": "Battery",
-            "value": "12"
+            "label": "Heart rate (current/resting)",
+            "value": "14"
           },
           {
             "label": "Heart rate (resting)",
             "value": "13"
           },
           {
-            "label": "Heart rate (current/resting)",
-            "value": "14"
+            "label": "Moon phase",
+            "value": "3"
+          },
+          {
+            "label": "Pollen",
+            "value": "16"
+          },
+          {
+            "label": "Rain",
+            "value": "4"
+          },
+          {
+            "label": "Sleep",
+            "value": "2"
+          },
+          {
+            "label": "Steps",
+            "value": "1"
+          },
+          {
+            "label": "Sunrise/sunset",
+            "value": "8"
+          },
+          {
+            "label": "UV / Smog",
+            "value": "11"
+          },
+          {
+            "label": "UV index",
+            "value": "10"
+          },
+          {
+            "label": "Weather",
+            "value": "15"
+          },
+          {
+            "label": "Week numbers",
+            "value": "7"
+          },
+          {
+            "label": "Wind",
+            "value": "9"
           }
         ]
       },
@@ -271,60 +295,68 @@
             "value": "0"
           },
           {
-            "label": "Steps",
-            "value": "1"
-          },
-          {
-            "label": "Sleep",
-            "value": "2"
-          },
-          {
-            "label": "Moon phase",
-            "value": "3"
-          },
-          {
-            "label": "Rain",
-            "value": "4"
-          },
-          {
-            "label": "Heart rate (average)",
-            "value": "5"
+            "label": "Battery",
+            "value": "12"
           },
           {
             "label": "Calories",
             "value": "6"
           },
           {
-            "label": "Week numbers",
-            "value": "7"
+            "label": "Heart rate (average)",
+            "value": "5"
           },
           {
-            "label": "Sunrise/sunset",
-            "value": "8"
-          },
-          {
-            "label": "Wind",
-            "value": "9"
-          },
-          {
-            "label": "UV index",
-            "value": "10"
-          },
-          {
-            "label": "UV / Smog",
-            "value": "11"
-          },
-          {
-            "label": "Battery",
-            "value": "12"
+            "label": "Heart rate (current/resting)",
+            "value": "14"
           },
           {
             "label": "Heart rate (resting)",
             "value": "13"
           },
           {
-            "label": "Heart rate (current/resting)",
-            "value": "14"
+            "label": "Moon phase",
+            "value": "3"
+          },
+          {
+            "label": "Pollen",
+            "value": "16"
+          },
+          {
+            "label": "Rain",
+            "value": "4"
+          },
+          {
+            "label": "Sleep",
+            "value": "2"
+          },
+          {
+            "label": "Steps",
+            "value": "1"
+          },
+          {
+            "label": "Sunrise/sunset",
+            "value": "8"
+          },
+          {
+            "label": "UV / Smog",
+            "value": "11"
+          },
+          {
+            "label": "UV index",
+            "value": "10"
+          },
+          {
+            "label": "Weather",
+            "value": "15"
+          },
+          {
+            "label": "Week numbers",
+            "value": "7"
+          },
+          {
+            "label": "Wind",
+            "value": "9"
           }
         ]
       },
@@ -339,60 +371,68 @@
             "value": "0"
           },
           {
-            "label": "Steps",
-            "value": "1"
-          },
-          {
-            "label": "Sleep",
-            "value": "2"
-          },
-          {
-            "label": "Moon phase",
-            "value": "3"
-          },
-          {
-            "label": "Rain",
-            "value": "4"
-          },
-          {
-            "label": "Heart rate (average)",
-            "value": "5"
+            "label": "Battery",
+            "value": "12"
           },
           {
             "label": "Calories",
             "value": "6"
           },
           {
-            "label": "Week numbers",
-            "value": "7"
+            "label": "Heart rate (average)",
+            "value": "5"
           },
           {
-            "label": "Sunrise/sunset",
-            "value": "8"
-          },
-          {
-            "label": "Wind",
-            "value": "9"
-          },
-          {
-            "label": "UV index",
-            "value": "10"
-          },
-          {
-            "label": "UV / Smog",
-            "value": "11"
-          },
-          {
-            "label": "Battery",
-            "value": "12"
+            "label": "Heart rate (current/resting)",
+            "value": "14"
           },
           {
             "label": "Heart rate (resting)",
             "value": "13"
           },
           {
-            "label": "Heart rate (current/resting)",
-            "value": "14"
+            "label": "Moon phase",
+            "value": "3"
+          },
+          {
+            "label": "Pollen",
+            "value": "16"
+          },
+          {
+            "label": "Rain",
+            "value": "4"
+          },
+          {
+            "label": "Sleep",
+            "value": "2"
+          },
+          {
+            "label": "Steps",
+            "value": "1"
+          },
+          {
+            "label": "Sunrise/sunset",
+            "value": "8"
+          },
+          {
+            "label": "UV / Smog",
+            "value": "11"
+          },
+          {
+            "label": "UV index",
+            "value": "10"
+          },
+          {
+            "label": "Weather",
+            "value": "15"
+          },
+          {
+            "label": "Week numbers",
+            "value": "7"
+          },
+          {
+            "label": "Wind",
+            "value": "9"
           }
         ]
       }
@@ -403,23 +443,44 @@
     "items": [
       {
         "type": "heading",
-        "defaultValue": "Units"
+        "defaultValue": "Wide tile picker"
       },
       {
-        "type": "radiogroup",
-        "messageKey": "temp_unit_select",
-        "label": "Temperature",
-        "defaultValue": "C",
+        "type": "text",
+        "defaultValue": "Music needs the Music plugin, which is Android only. Calendar needs the Calendar plugin. Options you cannot use are not listed."
+      },
+      {
+        "type": "select",
+        "messageKey": "wide_slot_select",
+        "label": "Wide tile shows",
+        "defaultValue": "0",
         "options": [
           {
-            "label": "Celsius (°C)",
-            "value": "C"
+            "label": "Calendar",
+            "value": "2"
           },
           {
-            "label": "Fahrenheit (°F)",
-            "value": "F"
+            "label": "Music",
+            "value": "1"
+          },
+          {
+            "label": "Weather",
+            "value": "0"
           }
         ]
+      }
+    ]
+  },
+  {
+    "type": "section",
+    "items": [
+      {
+        "type": "heading",
+        "defaultValue": "Units & format"
+      },
+      {
+        "type": "text",
+        "defaultValue": "Temperature and wind units now follow whatever you picked in the Pebble app, so they are no longer set here."
       },
       {
         "type": "radiogroup",
@@ -438,24 +499,17 @@
         ]
       },
       {
-        "type": "select",
-        "messageKey": "wind_unit_select",
-        "label": "Wind speed",
-        "defaultValue": "kmh",
-        "options": [
-          {
-            "label": "km/h",
-            "value": "kmh"
-          },
-          {
-            "label": "mph",
-            "value": "mph"
-          },
-          {
-            "label": "Beaufort (bft)",
-            "value": "bft"
-          }
-        ]
+        "type": "toggle",
+        "messageKey": "feels_like_toggle",
+        "label": "Show feels-like temperature",
+        "description": "Applies to both the wide and the small weather tile.",
+        "defaultValue": true
+      },
+      {
+        "type": "toggle",
+        "messageKey": "wind_bft_toggle",
+        "label": "Show wind in Beaufort",
+        "defaultValue": false
       }
     ]
   },
@@ -506,7 +560,7 @@
   },
   {
     "type": "text",
-    "defaultValue": "Steps and sleep are read directly from Pebble Health on your watch. Just make sure Pebble Health is enabled in the Pebble app (Apps/Timeline tab)."
+    "defaultValue": "Steps, HR, calories and sleep are read directly from Pebble Health on your watch. Just make sure you enable the Health permission."
   },
   {
     "type": "submit",

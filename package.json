@@ -15,6 +15,7 @@
         ],
         "displayName": "Metro WP8",
         "enableMultiJS": true,
+        "manifestVersion": 2,
         "messageKeys": [
             "ACCENT_R",
             "ACCENT_G",
@@ -59,29 +60,26 @@
             "week_use_csv",
             "week_csv_url",
             "WEEK_SRC",
-            "WEEK_TABLE"
+            "WEEK_TABLE",
+            "FEELS_LIKE",
+            "IS_DAY",
+            "POLLEN_TIER",
+            "POLLEN_OK",
+            "MUSIC_TITLE",
+            "MUSIC_ARTIST",
+            "MUSIC_PLAYING",
+            "CAL_TIMES",
+            "CAL_TITLE",
+            "WIDE_SLOT",
+            "wide_slot_select",
+            "WIND_BFT",
+            "wind_bft_toggle",
+            "TILE_AVAIL",
+            "feels_like_toggle"
         ],
         "projectType": "native",
         "resources": {
             "media": [
-                {
-                    "characterRegex": "[0-9A-Za-z%\u00b0/ :?-]",
-                    "file": "fonts/segoeui.ttf",
-                    "name": "FONT_REGULAR_12",
-                    "targetPlatforms": [
-                        "emery"
-                    ],
-                    "type": "font"
-                },
-                {
-                    "characterRegex": "[0-9A-Za-z%\u00b0/ :?-]",
-                    "file": "fonts/segoeui.ttf",
-                    "name": "FONT_REGULAR_9",
-                    "targetPlatforms": [
-                        "basalt"
-                    ],
-                    "type": "font"
-                },
                 {
                     "characterRegex": "[0-9A-Za-z%\u00b0/ :?-]",
                     "file": "fonts/segoeuib.ttf",
@@ -119,31 +117,6 @@
                     "type": "font"
                 },
                 {
-                    "file": "images/metro_wp8_icon.png",
-                    "menuIcon": true,
-                    "name": "METRO_WP8_ICON",
-                    "targetPlatforms": null,
-                    "type": "bitmap"
-                },
-                {
-                    "characterRegex": "[0-9A-Za-z%\u00b0/ :?-]",
-                    "file": "fonts/seguisb.ttf",
-                    "name": "FONT_SEGOEUISB_14",
-                    "targetPlatforms": [
-                        "emery"
-                    ],
-                    "type": "font"
-                },
-                {
-                    "characterRegex": "[0-9A-Za-z%\u00b0/ :?-]",
-                    "file": "fonts/seguisb.ttf",
-                    "name": "FONT_SEGOEUISB_10",
-                    "targetPlatforms": [
-                        "basalt"
-                    ],
-                    "type": "font"
-                },
-                {
                     "characterRegex": "[a-o]",
                     "file": "fonts/MetroIcons.ttf",
                     "name": "FONT_ICONS_36",
@@ -153,7 +126,7 @@
                     "type": "font"
                 },
                 {
-                    "characterRegex": "[a-qA-Z0-9:;<=>?@]",
+                    "characterRegex": "[a-sA-Z0-9:;<=>?@]",
                     "file": "fonts/MetroIcons.ttf",
                     "name": "FONT_ICONS_28",
                     "targetPlatforms": [
@@ -171,7 +144,7 @@
                     "type": "font"
                 },
                 {
-                    "characterRegex": "[a-qA-Z0-9:;<=>?@]",
+                    "characterRegex": "[a-sA-Z0-9:;<=>?@]",
                     "file": "fonts/MetroIcons.ttf",
                     "name": "FONT_ICONS_20",
                     "targetPlatforms": [
@@ -198,7 +171,7 @@
                     "type": "font"
                 },
                 {
-                    "characterRegex": "[a-qA-Z0-9:;<=>?@]",
+                    "characterRegex": "[a-sA-Z0-9:;<=>?@]",
                     "file": "fonts/MetroIcons.ttf",
                     "name": "FONT_ICONS_18",
                     "targetPlatforms": [
@@ -207,9 +180,52 @@
                     "type": "font"
                 },
                 {
-                    "characterRegex": "[a-qA-Z0-9:;<=>?@]",
+                    "characterRegex": "[a-sA-Z0-9:;<=>?@]",
                     "file": "fonts/MetroIcons.ttf",
                     "name": "FONT_ICONS_13",
+                    "targetPlatforms": [
+                        "basalt"
+                    ],
+                    "type": "font"
+                },
+                {
+                    "file": "images/metro_wp8_icon.png",
+                    "menuIcon": true,
+                    "name": "METRO_WP8_ICON",
+                    "targetPlatforms": null,
+                    "type": "bitmap"
+                },
+                {
+                    "characterRegex": "[0-9A-Za-z\u00c0-\u00ff%\u00b0/ :?!'\\\"(),.&+#@*\u2013\u2014-]",
+                    "file": "fonts/segoeui.ttf",
+                    "name": "FONT_REGULAR_12",
+                    "targetPlatforms": [
+                        "emery"
+                    ],
+                    "type": "font"
+                },
+                {
+                    "characterRegex": "[0-9A-Za-z\u00c0-\u00ff%\u00b0/ :?!'\\\"(),.&+#@*\u2013\u2014-]",
+                    "file": "fonts/segoeui.ttf",
+                    "name": "FONT_REGULAR_9",
+                    "targetPlatforms": [
+                        "basalt"
+                    ],
+                    "type": "font"
+                },
+                {
+                    "characterRegex": "[0-9A-Za-z\u00c0-\u00ff%\u00b0/ :?!'\\\"(),.&+#@*\u2013\u2014-]",
+                    "file": "fonts/seguisb.ttf",
+                    "name": "FONT_SEGOEUISB_14",
+                    "targetPlatforms": [
+                        "emery"
+                    ],
+                    "type": "font"
+                },
+                {
+                    "characterRegex": "[0-9A-Za-z\u00c0-\u00ff%\u00b0/ :?!'\\\"(),.&+#@*\u2013\u2014-]",
+                    "file": "fonts/seguisb.ttf",
+                    "name": "FONT_SEGOEUISB_10",
                     "targetPlatforms": [
                         "basalt"
                     ],
@@ -222,10 +238,17 @@
             "basalt",
             "emery"
         ],
+        "usesPermissions": [
+            "Internet",
+            "Location",
+            "Health",
+            "Calendar",
+            "ReadMusic"
+        ],
         "uuid": "f34df18d-5b81-4652-9f92-22e35912c268",
         "watchapp": {
             "watchface": true
         }
     },
-    "version": "1.6.8"
+    "version": "2.0.0"
 }

@@ -47,6 +47,32 @@
   // template 1's value.
   #define T2_ICON_Y_NUDGE (-4)
 
+  // Wide-tile variants (music / calendar). Both put an icon in the TITLE row
+  // rather than on a value line, which is what freed the two value lines to
+  // sit on template 2's own Y positions. The icon reuses T2_LABEL_W as the
+  // text indent so the title lines up with a dual tile's value column, and it
+  // needs only half template 2's lift: it is level with the small title font,
+  // not with a full-size value line.
+  #define TITLE_ICON_NUDGE  (-2)
+  // Calendar: title, a times line in the value font, then a two-line
+  // description in the title font. CAL_DESC_LH is deliberately tighter than
+  // the font's own leading -- at natural leading the fourth row does not fit,
+  // which is why the two description lines are drawn separately rather than
+  // left to Pebble's own word wrap.
+  #define CAL_TIMES_Y       (LABEL_H + 2)
+  #define CAL_DESC_Y        (CAL_TIMES_Y + 18)
+  #define CAL_DESC_LH       13
+  // Each line gets a slightly taller box than the line pitch so descenders
+  // ('p', 'g') are not clipped; the last box ends level with the tile's own
+  // bottom edge, inside the gap before the next row.
+  #define CAL_DESC_BOX_H    (CAL_DESC_LH + 3)
+  // The apparent temperature follows the current one in the smaller value
+  // font. Pebble draws every string from its box top, so the smaller font has
+  // to be pushed DOWN by the difference in ascent for the two baselines to
+  // meet -- the mirror of T2_ICON_Y_NUDGE, which lifts a larger glyph for the
+  // same reason.
+  #define FEELS_Y_NUDGE     4
+
   #define WEATHER_LEFT_MARGIN    6
   #define WEATHER_TOP_OFFSET     14
   #define WEATHER_ICON_Y_SUB     3
@@ -86,6 +112,19 @@
   #define T2_LABEL_W      16   // 13px icon + 3px clear space before the value
   #define T1_VAL_RIGHT_INSET 2
   #define T2_ICON_Y_NUDGE (-3)   // 13pt icon vs 10pt text
+
+  // See the Emery block for what these do. Basalt has 42px of inner height
+  // for four rows against Emery's 58, so the description sits tighter: at
+  // Emery's 13px pitch the second line overran the tile by 1px.
+  #define TITLE_ICON_NUDGE  (-2)
+  #define CAL_TIMES_Y       (LABEL_H + 1)
+  #define CAL_DESC_Y        (CAL_TIMES_Y + 12)
+  #define CAL_DESC_LH       9
+  #define CAL_DESC_BOX_H    (CAL_DESC_LH + 3)
+  // 4 here too, not 3: this follows the fonts' actual ascent difference
+  // (15 against 11), which happens not to match the point-size difference the
+  // way it does on Emery.
+  #define FEELS_Y_NUDGE     4
 
   #define WEATHER_LEFT_MARGIN    4
   #define WEATHER_TOP_OFFSET     10
@@ -150,6 +189,23 @@
 #define KEY_LOCATION     MESSAGE_KEY_LOCATION
 #define KEY_PHONE_BATTERY  MESSAGE_KEY_PHONE_BATTERY
 #define KEY_PHONE_CHARGING MESSAGE_KEY_PHONE_CHARGING
+// Added with the plugin system. All of these arrive from a plugin source via
+// PebbleKit JS rather than from the settings page.
+#define KEY_FEELS_LIKE   MESSAGE_KEY_FEELS_LIKE     // apparent temperature, same unit as TEMP_CURRENT
+#define KEY_IS_DAY       MESSAGE_KEY_IS_DAY         // 1 = daylight at the weather location
+#define KEY_POLLEN_TIER  MESSAGE_KEY_POLLEN_TIER    // 0..3, see POLLEN_LABELS
+#define KEY_POLLEN_OK    MESSAGE_KEY_POLLEN_OK      // 1 = in Europe and in season
+#define KEY_MUSIC_TITLE  MESSAGE_KEY_MUSIC_TITLE
+#define KEY_MUSIC_ARTIST MESSAGE_KEY_MUSIC_ARTIST
+#define KEY_MUSIC_PLAYING MESSAGE_KEY_MUSIC_PLAYING
+#define KEY_CAL_TIMES    MESSAGE_KEY_CAL_TIMES      // "09:00-10:30" or "All day"
+#define KEY_CAL_TITLE    MESSAGE_KEY_CAL_TITLE
+#define KEY_WIDE_SLOT    MESSAGE_KEY_WIDE_SLOT      // WideSlot below
+#define KEY_TILE_AVAIL   MESSAGE_KEY_TILE_AVAIL     // AVAIL_* bitmask
+// KEY_WIND_BFT is deliberately NOT read here. The phone converts to Beaufort
+// before sending, so the toggle reaches the watch as WIND_UNIT = WIND_UNIT_BFT
+// alongside an already-converted WIND_SPEED. Reading the toggle as well would
+// give two sources of truth for the same thing.
 
 // ─── Persistent storage keys ─────────────────────────────────────────────────
 #define PERSIST_ACCENT_R   100
@@ -186,6 +242,16 @@
 #define PERSIST_HR_REST_DAY  132   // the day s_hr_rest was last computed for
 #define PERSIST_WEEK_SRC     133
 #define PERSIST_WEEK_TABLE   134
+#define PERSIST_FEELS_LIKE   135
+#define PERSIST_IS_DAY       136
+#define PERSIST_POLLEN_TIER  137
+#define PERSIST_POLLEN_OK    138
+#define PERSIST_WIDE_SLOT    139
+#define PERSIST_TILE_AVAIL   140
+// Music and calendar are NOT persisted. Both go stale within minutes, and a
+// watchface that reopened showing yesterday's meeting would be worse than one
+// showing nothing until the phone speaks. TILE_AVAIL is persisted, though,
+// because it is what tells those tiles apart from "no data yet".
 
 #define FLIP_DURATION_MS   200
 #define FLIP_DELAY_MS      1000
@@ -209,23 +275,59 @@ static GColor  s_accent;
 static uint8_t s_accent_r = 0x55, s_accent_g = 0x00, s_accent_b = 0xFF;
 
 static bool s_theme_light = false;
+// No longer a setting. The weather plugin's text shape is the only thing that
+// knows which unit the user picked in the Pebble app, so the unit arrives WITH
+// the figures and this just records which suffix to draw.
 static bool s_temp_unit_fahrenheit = false;
 static bool s_date_order_mdy = false;
-// Three-way now, so no longer a bool. The numbering is wire format: it is what
-// the phone sends and what PERSIST_WIND_UNIT holds, and 0/1 keep the meaning the
-// old bool had, so a setting saved by an earlier version still reads correctly.
+// The numbering is wire format: it is what the phone sends and what
+// PERSIST_WIND_UNIT holds, so existing entries keep their values and new ones
+// are only appended. 0/1 kept the meaning the original bool had.
+//
+// The watch no longer converts anything -- the phone sends a figure already in
+// the user's unit (or in Beaufort, if the toggle is on) and names the unit
+// here. m/s and knots are new, and exist because the Pebble app offers them
+// and the old three-way setting did not.
 typedef enum {
-  WIND_UNIT_KMH = 0,   // what Open-Meteo returns
-  WIND_UNIT_MPH = 1,
-  WIND_UNIT_BFT = 2,
+  WIND_UNIT_KMH   = 0,
+  WIND_UNIT_MPH   = 1,
+  WIND_UNIT_BFT   = 2,
+  WIND_UNIT_MS    = 3,
+  WIND_UNIT_KNOTS = 4,
+  WIND_UNIT_COUNT
 } WindUnit;
 static WindUnit s_wind_unit = WIND_UNIT_KMH;
 
+// Which content the wide tile in row 2 draws. Wire format again: these are the
+// values wide_slot_select sends and PERSIST_WIDE_SLOT holds.
+typedef enum {
+  WIDE_WEATHER  = 0,
+  WIDE_MUSIC    = 1,
+  WIDE_CALENDAR = 2,
+  WIDE_COUNT
+} WideSlot;
+static WideSlot s_wide_slot = WIDE_WEATHER;
+
+// Which plugin sources the phone actually found, so a tile can say "no plugin"
+// instead of sitting on "--" forever. Must match the AVAIL_* values in
+// index.js.
+#define AVAIL_WEATHER 1
+#define AVAIL_AIR     2
+#define AVAIL_POLLEN  4
+#define AVAIL_MUSIC   8
+#define AVAIL_CAL     16
+static int s_tile_avail = 0;
+
+// Temperatures arrive in the user's own unit, so there is no value that is
+// safely "no reading" -- 0 is a real temperature in both C and F. -999 is
+// outside any of them and keeps these ordinary ints.
+#define TEMP_UNKNOWN (-999)
+
 static int  s_aqi          = 0;
 static int  s_wmo_icon     = 0;
-static int  s_temp_high    = 0;
-static int  s_temp_low     = 0;
-static int  s_temp_current = 0;
+static int  s_temp_high    = TEMP_UNKNOWN;
+static int  s_temp_low     = TEMP_UNKNOWN;
+static int  s_temp_current = TEMP_UNKNOWN;
 static int  s_sunrise_min  = -1;   // minutes since local midnight, -1 = unknown
 static int  s_sunset_min   = -1;
 static int  s_uv_index_x10 = -1;   // UV * 10, keeps one decimal without floats
@@ -252,6 +354,26 @@ static char s_location[32] = "";
 static int  s_phone_battery = -1;
 static bool s_phone_charging = false;
 
+// Already in the user's unit, like s_temp_current.
+static int  s_feels_like = TEMP_UNKNOWN;
+// -1 unknown, 0 night, 1 day. The provider knows this for the weather's own
+// location, which is better than deriving it from sunrise/sunset in the
+// PHONE's timezone -- see is_night_now().
+static int  s_is_day = -1;
+static int  s_pollen_tier = -1;     // 0..3, -1 = no figure
+static bool s_pollen_ok   = false;  // in Europe and in season
+
+// Volatile by design; see the persist-key block above.
+static char s_music_title[48]  = "";
+static char s_music_artist[48] = "";
+static bool s_music_playing    = false;
+static char s_cal_times[20] = "";
+static char s_cal_title[64] = "";
+
+// Set once at startup: true when the Health permission was refused, so the
+// health tiles can say "n/a" rather than showing a plausible-looking zero.
+static bool s_health_denied = false;
+
 static int  s_steps   = 0;
 static int  s_sleep_h = 0;
 static int  s_sleep_m = 0;
@@ -275,6 +397,11 @@ static const char *WEATHER_ICONS[] = {
 #define WEATHER_ICON_NIGHT_PARTLY_CLOUDY "o"
 
 static bool is_night_now(void) {
+  // The provider's own answer wins when we have it: it is evaluated at the
+  // weather's location, whereas the fallback below compares local clock time
+  // on the WATCH against sunrise/sunset there. Those agree at home and drift
+  // apart the moment the two are in different timezones.
+  if (s_is_day >= 0) return s_is_day == 0;
   if (s_sunrise_min < 0 || s_sunset_min < 0) return false;
   time_t now = time(NULL);
   struct tm *t = localtime(&now);
@@ -321,6 +448,12 @@ static const char *weather_icon_for(int idx) {
 #define ICON_ALERT      "Z"   // octagram - poor air quality / high ozone
 #define ICON_SMOG       "p"
 #define ICON_HAND_HEART "q"   // resting heart rate (mdi hand-heart)
+#define ICON_POLLEN     "r"   // mdi flower-pollen
+#define ICON_MUSIC      "s"   // mdi music
+// Same glyph as ICON_WEEK_ISO -- mdi calendar was already in the font for the
+// week tile. Named separately so the two uses can be told apart at the call
+// site, and so one can be repointed later without disturbing the other.
+#define ICON_CALENDAR   ";"
 
 static const char *MOON_ICONS[] = { "A","B","C","D","E","F","G","H" };
 
@@ -374,8 +507,15 @@ typedef enum {
   CONTENT_BATTERY,
   CONTENT_HR_REST,     // 13
   CONTENT_HR_DUAL,     // 14 - current sample over resting
+  CONTENT_WEATHER_SM,  // 15 - condition icon, current temp, feels-like
+  CONTENT_POLLEN,      // 16
   CONTENT_COUNT
 } ContentId;
+
+// Pollen tiers as the OpenMeteo plugin defines them (0..3). These are the
+// plugin's own SHORT forms -- the long ones ("Very High") overrun a square
+// tile's value line.
+static const char *POLLEN_LABELS[] = { "Low", "Mod", "High", "V high" };
 
 static ContentId s_slot[4] = { CONTENT_AQI, CONTENT_STEPS, CONTENT_SLEEP, CONTENT_BATTERY };
 
@@ -430,7 +570,21 @@ static const char *MOON_NAMES[] = {
 #define UV_ALERT_THRESHOLD     5    // UV index at/above which the sun icon gains an alert
 #define OZONE_ALERT_THRESHOLD  100  // ug/m3
 #define AQI_ALERT_THRESHOLD    60   // European AQI 60+ is "Poor" or worse
-#define WIND_SOCK_THRESHOLD    30   // km/h at/above which the arrow becomes a windsock
+// The windsock cut-in used to be a plain "30 km/h", which stopped meaning
+// anything once the figure can arrive in five different units: 30 mph is a
+// gale, and Beaufort never reaches 30 at all, so the sock would never appear.
+// One threshold per unit, all the same wind: 30 km/h is ~19 mph, ~8.3 m/s,
+// ~16 knots, force 5.
+static bool wind_is_strong(int speed) {
+  if (speed < 0) return false;
+  switch (s_wind_unit) {
+    case WIND_UNIT_MPH:   return speed >= 19;
+    case WIND_UNIT_BFT:   return speed >= 5;
+    case WIND_UNIT_MS:    return speed >= 8;
+    case WIND_UNIT_KNOTS: return speed >= 16;
+    default:              return speed >= 30;
+  }
+}
 
 // ─── UV classification (WHO bands) ───────────────────────────────────────────
 // Shared by both UV tiles so their icon rule can't drift apart.
@@ -822,40 +976,26 @@ static GFont s_font_icon_t2;     // MetroIcons, template-2 row size
 static GColor theme_fg(void) { return s_theme_light ? GColorBlack : GColorWhite; }
 static GColor theme_bg(void) { return s_theme_light ? GColorWhite : GColorBlack; }
 
-// Weather always arrives in Celsius; conversion happens at draw time so a
-// unit change needs no refetch.
-static int display_temp(int c) {
-  return s_temp_unit_fahrenheit ? (c * 9) / 5 + 32 : c;
-}
+// ─── Units ───────────────────────────────────────────────────────────────────
+// Nothing is converted on the watch any more. Temperatures and wind speeds
+// arrive already expressed in whatever the user chose in the Pebble app --
+// a plugin's numericValue is always canonical (Celsius, metres per second)
+// and only its text shapes carry the chosen unit, so the figure and the unit
+// are read off the text together on the phone and sent here as a pair.
+//
+// That removes both conversions AND two settings: the watchface no longer asks
+// for a temperature unit, and no longer has to ask for a wind unit either,
+// since it is told which one it was given. The one wind setting left is the
+// Beaufort toggle, which the phone applies to the m/s figure before sending.
 static char temp_unit_char(void) { return s_temp_unit_fahrenheit ? 'F' : 'C'; }
 
-// Wind always arrives in km/h; convert at draw time so a unit change needs
-// no refetch. Integer maths: 0.621371 mph per km/h, rounded.
-// Beaufort force from km/h, WMO scale. The table is the INCLUSIVE upper bound of
-// each force in km/h: force 0 is dead calm (under 1 km/h) and so tops out at 0
-// once the speed is a whole number, force 1 is 1-5, and anything past 117 is a
-// hurricane-force 12.
-static int kmh_to_beaufort(int kmh) {
-  static const int bft_max_kmh[12] = { 0, 5, 11, 19, 28, 38, 49, 61, 74, 88, 102, 117 };
-  for (int b = 0; b < 12; b++) {
-    if (kmh <= bft_max_kmh[b]) return b;
-  }
-  return 12;
-}
-
-static int display_wind(int kmh) {
-  switch (s_wind_unit) {
-    // 0.621371 mph per km/h, in integer maths, rounded.
-    case WIND_UNIT_MPH: return (kmh * 6214 + 5000) / 10000;
-    case WIND_UNIT_BFT: return kmh_to_beaufort(kmh);
-    default:            return kmh;
-  }
-}
 static const char *wind_unit_str(void) {
   switch (s_wind_unit) {
-    case WIND_UNIT_MPH: return "mph";
-    case WIND_UNIT_BFT: return "bft";
-    default:            return "km/h";
+    case WIND_UNIT_MPH:   return "mph";
+    case WIND_UNIT_BFT:   return "bft";
+    case WIND_UNIT_MS:    return "m/s";
+    case WIND_UNIT_KNOTS: return "kn";
+    default:              return "km/h";
   }
 }
 
@@ -895,6 +1035,11 @@ static const char *aqi_classification(int aqi) {
 typedef struct {
   const char *title;
   bool        dual;
+  // Template 1 normally clips the title to the inner width. The small weather
+  // tile's title is a place name rather than a fixed label, so it borrows the
+  // right-hand padding back the way the value line already does -- two more
+  // pixels, which is the difference between "Eindhoven" fitting and not.
+  bool        title_borrow;
   const char *icon;       // template 1
   const char *value;
   const char *l1_icon;    // template 2
@@ -907,6 +1052,7 @@ typedef struct {
 
 static void tile_spec_for(ContentId id, TileSpec *s) {
   s->dual = false;
+  s->title_borrow = false;
   s->icon = ""; s->value = "--";
   s->l1_icon = ""; s->l1_value = ""; s->l2_icon = ""; s->l2_value = "";
 
@@ -922,19 +1068,28 @@ static void tile_spec_for(ContentId id, TileSpec *s) {
     case CONTENT_STEPS:
       s->title = "STEPS";
       s->icon  = ICON_STEPS;
-      snprintf(s->buf1, sizeof(s->buf1), "%d", s_steps);
-      s->value = s->buf1;
+      // With manifestVersion 2 the Health permission can be refused, and the
+      // accessibility checks then simply never fill these in. Saying "n/a"
+      // beats a confident "0" that looks like a lazy day.
+      if (s_health_denied) {
+        s->value = "n/a";
+      } else {
+        snprintf(s->buf1, sizeof(s->buf1), "%d", s_steps);
+        s->value = s->buf1;
+      }
       break;
 
     case CONTENT_SLEEP:
       s->title = "SLEEP";
       s->icon  = ICON_SLEEP;
-      if (s_sleep_h == 0 && s_sleep_m == 0) {
+      if (s_health_denied) {
+        s->value = "n/a";
+      } else if (s_sleep_h == 0 && s_sleep_m == 0) {
         s->value = "--";
       } else {
         // Drop the trailing "m" on double-digit hours so the string stays
         // the 5-character width that is proven to fit.
-        if (s_sleep_h >= 10) snprintf(s->buf1, sizeof(s->buf1), "%dh %02d",  s_sleep_h, s_sleep_m);
+        if (s_sleep_h >= 20) snprintf(s->buf1, sizeof(s->buf1), "%dh %02d",  s_sleep_h, s_sleep_m);
         else                 snprintf(s->buf1, sizeof(s->buf1), "%dh %02dm", s_sleep_h, s_sleep_m);
         s->value = s->buf1;
       }
@@ -963,7 +1118,9 @@ static void tile_spec_for(ContentId id, TileSpec *s) {
       s->title = "AVG HR";
       s->icon  = ICON_HEART;
 #if defined(PBL_PLATFORM_EMERY)
-      {
+      if (s_health_denied) {
+        s->value = "n/a";
+      } else {
         int avg = hr_average();
         if (avg > 0) {
           snprintf(s->buf1, sizeof(s->buf1), "%d bpm", avg);
@@ -981,7 +1138,9 @@ static void tile_spec_for(ContentId id, TileSpec *s) {
       s->title = "RHR";
       s->icon  = ICON_HAND_HEART;
 #if defined(PBL_PLATFORM_EMERY)
-      if (s_hr_rest > 0) {
+      if (s_health_denied) {
+        s->value = "n/a";
+      } else if (s_hr_rest > 0) {
         snprintf(s->buf1, sizeof(s->buf1), "%d bpm", s_hr_rest);
         s->value = s->buf1;
       } else {
@@ -1001,6 +1160,10 @@ static void tile_spec_for(ContentId id, TileSpec *s) {
       s->l1_icon = ICON_HEART;
       s->l2_icon = ICON_HAND_HEART;
 #if defined(PBL_PLATFORM_EMERY)
+      if (s_health_denied) {
+        s->l1_value = "n/a";
+        s->l2_value = "n/a";
+      } else {
       if (s_hrm_last > 0) {
         snprintf(s->buf1, sizeof(s->buf1), "%d", s_hrm_last);
         s->l1_value = s->buf1;
@@ -1012,6 +1175,7 @@ static void tile_spec_for(ContentId id, TileSpec *s) {
         s->l2_value = s->buf2;
       } else {
         s->l2_value = "--";
+      }
       }
 #else
       s->l1_value = "n/a";
@@ -1032,7 +1196,9 @@ static void tile_spec_for(ContentId id, TileSpec *s) {
             & HealthServiceAccessibilityMaskAvailable) {
         total += (int)health_service_sum_today(HealthMetricRestingKCalories);
       }
-      if (total > 0) {
+      if (s_health_denied) {
+        s->value = "n/a";
+      } else if (total > 0) {
         snprintf(s->buf1, sizeof(s->buf1), "%d cal", total);
         s->value = s->buf1;
       } else {
@@ -1091,13 +1257,12 @@ static void tile_spec_for(ContentId id, TileSpec *s) {
       s->title = "WIND";
       // Above the threshold the direction arrow gives way to a windsock --
       // at that speed "it is blowing hard" matters more than the bearing.
-      s->icon  = (s_wind_speed >= WIND_SOCK_THRESHOLD)
+      s->icon  = wind_is_strong(s_wind_speed)
                    ? ICON_WIND : wind_arrow_glyph(s_wind_dir);
       if (s_wind_speed < 0) {
         s->value = "--";
       } else {
-        snprintf(s->buf1, sizeof(s->buf1), "%d %s",
-                 display_wind(s_wind_speed), wind_unit_str());
+        snprintf(s->buf1, sizeof(s->buf1), "%d %s", s_wind_speed, wind_unit_str());
         s->value = s->buf1;
       }
       break;
@@ -1153,6 +1318,49 @@ static void tile_spec_for(ContentId id, TileSpec *s) {
       break;
     }
 
+    case CONTENT_WEATHER_SM:
+      // The place name takes the title row, which is why this tile exists at
+      // all: it is the wide weather tile's information in a square, for people
+      // who want the wide slot for music or their calendar instead. Long names
+      // WILL ellipsise -- accepted, since the alternative is a tile labelled
+      // "WTHR" that tells you nothing the icon does not.
+      s->title        = (s_location[0] != '\0') ? s_location : "WTHR";
+      s->title_borrow = true;
+      s->icon         = weather_icon_for(s_wmo_icon);
+      if (s_temp_current == TEMP_UNKNOWN) {
+        s->value = (s_tile_avail & AVAIL_WEATHER) ? "--" : "n/a";
+      } else if (s_feels_like == TEMP_UNKNOWN) {
+        // Nothing in brackets -- either the source gave no apparent
+        // temperature, or the user switched it off -- so there is room for the
+        // unit letter that the two-figure form has to leave out.
+        snprintf(s->buf1, sizeof(s->buf1), "%d°%c", s_temp_current, temp_unit_char());
+        s->value = s->buf1;
+      } else {
+        // No unit letter: "18° (16°)" already fills the value line, and the
+        // wide tile above (or the settings page) says which unit it is.
+        snprintf(s->buf1, sizeof(s->buf1), "%d° (%d°)",
+                 s_temp_current, s_feels_like);
+        s->value = s->buf1;
+      }
+      break;
+
+    case CONTENT_POLLEN:
+      s->title = "POLLEN";
+      s->icon  = ICON_POLLEN;
+      if (!(s_tile_avail & AVAIL_POLLEN) && s_pollen_tier < 0) {
+        // The OpenMeteo plugin is not installed at all.
+        s->value = "n/a";
+      } else if (!s_pollen_ok || s_pollen_tier < 0) {
+        // Installed, but outside Europe or out of season -- the plugin sends
+        // no tier at all then, which is different from not having asked yet.
+        s->value = "--";
+      } else {
+        int tier = s_pollen_tier;
+        if (tier > 3) tier = 3;
+        s->value = POLLEN_LABELS[tier];
+      }
+      break;
+
     default:
       s->title = "";
       break;
@@ -1161,7 +1369,9 @@ static void tile_spec_for(ContentId id, TileSpec *s) {
 
 // ─── Template 1: title / centred icon / value ────────────────────────────────
 static void draw_template_single(GContext *ctx, GRect inner, int px, const TileSpec *s) {
-  GRect lbl_r = GRect(inner.origin.x, inner.origin.y, inner.size.w, LABEL_H);
+  int title_w = s->title_borrow ? inner.size.w + px - T1_VAL_RIGHT_INSET
+                                : inner.size.w;
+  GRect lbl_r = GRect(inner.origin.x, inner.origin.y, title_w, LABEL_H);
   graphics_draw_text(ctx, s->title, s_font_sm, lbl_r,
                      GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
 
@@ -1209,6 +1419,213 @@ static void draw_template_dual(GContext *ctx, GRect inner, int px, const TileSpe
     graphics_draw_text(ctx, values[i], s_font_sb, val_r,
                        GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
   }
+}
+
+// ─── Wide tile: shared title row ─────────────────────────────────────────────
+// Music and calendar both put their icon up in the title row. The weather
+// tile does not -- its icon IS its content.
+static void draw_wide_title(GContext *ctx, GRect inner, const char *icon,
+                            const char *title) {
+  GRect icon_r = GRect(inner.origin.x, inner.origin.y + TITLE_ICON_NUDGE,
+                       T2_LABEL_W, T2_LINE_H);
+  graphics_draw_text(ctx, icon, s_font_icon_t2, icon_r,
+                     GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
+
+  GRect lbl_r = GRect(inner.origin.x + T2_LABEL_W, inner.origin.y,
+                      inner.size.w - T2_LABEL_W, LABEL_H);
+  graphics_draw_text(ctx, title, s_font_sm, lbl_r,
+                     GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+}
+
+// ─── Wide tile: NOW PLAYING ──────────────────────────────────────────────────
+// Title and artist sit on template 2's own two Y positions, so the pair lines
+// up exactly with a dual square tile beside it.
+static void draw_wide_music(GContext *ctx, GRect inner, int px) {
+  int w = inner.size.w + px - T1_VAL_RIGHT_INSET;
+  const char *l1 = s_music_title;
+  const char *l2 = s_music_artist;
+
+  // The source reports whether the track is actually playing, so say which it
+  // is rather than labelling a paused track "NOW PLAYING". Only when there IS
+  // a track -- an empty tile stays under the normal heading.
+  bool have_track = (l1[0] != '\0' || l2[0] != '\0');
+  draw_wide_title(ctx, inner, ICON_MUSIC,
+                  (have_track && !s_music_playing) ? "PAUSED" : "NOW PLAYING");
+
+  if (!have_track) {
+    // Nothing to show. Which of the two reasons it is matters: on iPhone the
+    // music source does not exist at all, and no amount of waiting will fill
+    // this in.
+    l1 = (s_tile_avail & AVAIL_MUSIC) ? "Nothing playing" : "No music plugin";
+    l2 = "";
+  }
+
+  GRect r1 = GRect(inner.origin.x, inner.origin.y + T2_LINE1_Y, w, T2_LINE_H);
+  graphics_draw_text(ctx, l1, s_font_sb, r1,
+                     GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+  GRect r2 = GRect(inner.origin.x, inner.origin.y + T2_LINE2_Y, w, T2_LINE_H);
+  graphics_draw_text(ctx, l2, s_font_sb, r2,
+                     GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+}
+
+// ─── Wide tile: CALENDAR ───────────────────────────────────────────────────
+// Longest prefix of `s`, broken at a space, that fits `w` pixels -- measured
+// with the real font rather than guessed from a character count, since a line
+// of "Illiiill" and one of "WWWMMM" are nothing like the same width.
+//
+// Returns the byte length for line one. 0 means even the first word overruns,
+// and the caller then lets Pebble ellipsise the whole thing on one line.
+// Width of one unwrapped line of `s` in `font`. The box is far wider than any
+// tile on purpose: what is wanted is the text's own width, not a wrapped
+// height.
+static int text_width(const char *s, GFont font) {
+  GSize sz = graphics_text_layout_get_content_size(
+      s, font, GRect(0, 0, 1000, 100),
+      GTextOverflowModeWordWrap, GTextAlignmentLeft);
+  return sz.w;
+}
+
+static int wrap_break(const char *s, GFont font, int w) {
+  char buf[64];
+  int best = 0;
+  for (int i = 0; s[i] != '\0'; i++) {
+    bool at_space = (s[i] == ' ');
+    bool at_end   = (s[i + 1] == '\0');
+    if (!at_space && !at_end) continue;
+
+    int len = at_space ? i : i + 1;
+    if (len <= 0 || len >= (int)sizeof(buf)) break;
+    memcpy(buf, s, len);
+    buf[len] = '\0';
+
+    if (text_width(buf, font) <= w) best = len;
+    else break;
+  }
+  return best;
+}
+
+static void draw_wide_calendar(GContext *ctx, GRect inner, int px) {
+  // Indented to line up with the title TEXT, clearing the icon column.
+  // The times line sits at CAL_TIMES_Y, which is high enough that the title
+  // row's icon -- an 18pt glyph lifted by TITLE_ICON_NUDGE -- hangs into it:
+  // left-aligned to the tile edge the two were touching. The music tile has
+  // no such problem, because its first line starts 8px further down.
+  // The cost is T2_LABEL_W of width, which the times line has to spare and
+  // the description absorbs by wrapping a word earlier.
+  int x = inner.origin.x + T2_LABEL_W;
+  int w = inner.size.w + px - T1_VAL_RIGHT_INSET - T2_LABEL_W;
+  draw_wide_title(ctx, inner, ICON_CALENDAR, "CALENDAR");
+
+  if (s_cal_times[0] == '\0' && s_cal_title[0] == '\0') {
+    const char *msg = (s_tile_avail & AVAIL_CAL) ? "Nothing upcoming"
+                                                 : "No calendar plugin";
+    GRect msg_r = GRect(x, inner.origin.y + CAL_DESC_Y, w, CAL_DESC_BOX_H * 2);
+    graphics_draw_text(ctx, msg, s_font_sm, msg_r,
+                       GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+    return;
+  }
+
+  // Times keep the value font, which is what makes them the thing you read
+  // first.
+  GRect times_r = GRect(x, inner.origin.y + CAL_TIMES_Y, w, T2_LINE_H);
+  graphics_draw_text(ctx, s_cal_times, s_font_sb, times_r,
+                     GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+
+  // The description drops to the title font and wraps to two lines. Dropping a
+  // size is exactly what buys the second line: at the value font there is only
+  // room for one, and one line of an event title is usually not enough.
+  int cut = wrap_break(s_cal_title, s_font_sm, w);
+  GRect l1_r = GRect(x, inner.origin.y + CAL_DESC_Y, w, CAL_DESC_BOX_H);
+  GRect l2_r = GRect(x, inner.origin.y + CAL_DESC_Y + CAL_DESC_LH,
+                     w, CAL_DESC_BOX_H);
+
+  if (cut <= 0 || cut >= (int)strlen(s_cal_title)) {
+    // One line is enough, or the first word alone is too wide to break.
+    graphics_draw_text(ctx, s_cal_title, s_font_sm, l1_r,
+                       GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+    return;
+  }
+
+  char line1[64];
+  int n = cut < (int)sizeof(line1) - 1 ? cut : (int)sizeof(line1) - 1;
+  memcpy(line1, s_cal_title, n);
+  line1[n] = '\0';
+  graphics_draw_text(ctx, line1, s_font_sm, l1_r,
+                     GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+
+  // Second line is the remainder with its separating space skipped, left to
+  // Pebble's own ellipsis if the event title runs long.
+  const char *rest = s_cal_title + cut;
+  while (*rest == ' ') rest++;
+  graphics_draw_text(ctx, rest, s_font_sm, l2_r,
+                     GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+}
+
+// ─── Wide tile: weather ──────────────────────────────────────────────────────
+static void draw_wide_weather(GContext *ctx, GRect inner, int px) {
+  char buf[32];
+
+  GRect loc_r = GRect(inner.origin.x, inner.origin.y, inner.size.w, LABEL_H);
+  graphics_draw_text(ctx, s_location, s_font_sm, loc_r,
+                     GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+
+  int left_margin = WEATHER_LEFT_MARGIN;
+  int top = inner.origin.y + WEATHER_TOP_OFFSET;
+  GRect icon_r = GRect(inner.origin.x + left_margin, top - WEATHER_ICON_Y_SUB,
+                       WEATHER_ICON_W, WEATHER_ICON_H);
+  graphics_draw_text(ctx, weather_icon_for(s_wmo_icon), s_font_weather, icon_r,
+                     GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
+
+  int tx = inner.origin.x + left_margin + WEATHER_TX_OFFSET;
+  // Borrow the right-hand padding back, as the high/low line already does --
+  // the current line needs it now that the apparent temperature shares it.
+  int tw = inner.size.w + px - left_margin - WEATHER_TX_OFFSET;
+
+  // Current temperature, with the apparent temperature after it in the
+  // smaller value font. Two fonts rather than one: "18°C (16°)" set entirely
+  // in s_font_med overruns the line on BOTH platforms (85px against 82 on
+  // Emery, 61 against 59 on Basalt), and the smaller figure also reads
+  // correctly as the secondary one.
+  // Figures arrive already in the user's unit; only the suffix is decided here.
+  char feels[12];
+  if (s_temp_current == TEMP_UNKNOWN) snprintf(buf, sizeof(buf), "--°");
+  else snprintf(buf, sizeof(buf), "%d°%c", s_temp_current, temp_unit_char());
+  feels[0] = '\0';
+  if (s_feels_like != TEMP_UNKNOWN) {
+    snprintf(feels, sizeof(feels), " (%d°)", s_feels_like);
+  }
+
+  int cur_w = text_width(buf, s_font_med);
+  if (feels[0] != '\0' && s_temp_current != TEMP_UNKNOWN
+        && cur_w + text_width(feels, s_font_sb) > tw) {
+    // One case overruns: both figures negative AND in double digits, as in
+    // "-18°C (-21°)". Dropping the unit letter off the big number buys 13px,
+    // far more than enough, and the unit is still spelled out on the
+    // high/low line right below.
+    snprintf(buf, sizeof(buf), "%d°", s_temp_current);
+    cur_w = text_width(buf, s_font_med);
+  }
+
+  GRect cur_r = GRect(tx, top + WEATHER_CUR_Y_OFFSET, tw, WEATHER_CUR_H);
+  graphics_draw_text(ctx, buf, s_font_med, cur_r,
+                     GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
+  if (feels[0] != '\0') {
+    GRect feels_r = GRect(tx + cur_w, top + WEATHER_CUR_Y_OFFSET + FEELS_Y_NUDGE,
+                          tw - cur_w, WEATHER_CUR_H);
+    graphics_draw_text(ctx, feels, s_font_sb, feels_r,
+                       GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+  }
+
+  if (s_temp_high == TEMP_UNKNOWN || s_temp_low == TEMP_UNKNOWN) {
+    snprintf(buf, sizeof(buf), "--°/--°");
+  } else {
+    snprintf(buf, sizeof(buf), "%d°%c/%d°%c",
+             s_temp_high, temp_unit_char(), s_temp_low, temp_unit_char());
+  }
+  GRect hl_r = GRect(tx, top + WEATHER_HL_Y_OFFSET, tw,
+                     inner.size.h - (top + WEATHER_HL_Y_OFFSET - inner.origin.y));
+  graphics_draw_text(ctx, buf, s_font_sb, hl_r,
+                     GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
 }
 
 static void draw_tile_content(GContext *ctx, TileId id, GRect r) {
@@ -1275,36 +1692,16 @@ static void draw_tile_content(GContext *ctx, TileId id, GRect r) {
       break;
     }
 
-    case TILE_WEATHER: {
-      GRect loc_r = GRect(inner.origin.x, inner.origin.y, inner.size.w, LABEL_H);
-      graphics_draw_text(ctx, s_location, s_font_sm, loc_r,
-                         GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
-
-      int left_margin = WEATHER_LEFT_MARGIN;
-      int top = inner.origin.y + WEATHER_TOP_OFFSET;
-      GRect icon_r = GRect(inner.origin.x + left_margin, top - WEATHER_ICON_Y_SUB,
-                           WEATHER_ICON_W, WEATHER_ICON_H);
-      graphics_draw_text(ctx, weather_icon_for(s_wmo_icon), s_font_weather, icon_r,
-                         GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
-
-      int tx = inner.origin.x + left_margin + WEATHER_TX_OFFSET;
-      int tw = inner.size.w - left_margin - WEATHER_TX_OFFSET;
-
-      snprintf(buf, sizeof(buf), "%d\u00B0%c", display_temp(s_temp_current), temp_unit_char());
-      GRect cur_r = GRect(tx, top + WEATHER_CUR_Y_OFFSET, tw, WEATHER_CUR_H);
-      graphics_draw_text(ctx, buf, s_font_med, cur_r,
-                         GTextOverflowModeWordWrap, GTextAlignmentLeft, NULL);
-
-      tw = inner.size.w + px - left_margin - WEATHER_TX_OFFSET;   // borrow the padding back
-      snprintf(buf, sizeof(buf), "%d\u00B0%c/%d\u00B0%c",
-               display_temp(s_temp_high), temp_unit_char(),
-               display_temp(s_temp_low),  temp_unit_char());
-      GRect hl_r = GRect(tx, top + WEATHER_HL_Y_OFFSET, tw,
-                         inner.size.h - (top + WEATHER_HL_Y_OFFSET - inner.origin.y));
-      graphics_draw_text(ctx, buf, s_font_sb, hl_r,
-                         GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
+    // Row 2's wide tile. Which of the three it draws is the user's choice --
+    // the tile keeps its name because its POSITION has not changed, the same
+    // way the four slots keep theirs.
+    case TILE_WEATHER:
+      switch (s_wide_slot) {
+        case WIDE_MUSIC:    draw_wide_music(ctx, inner, px);    break;
+        case WIDE_CALENDAR: draw_wide_calendar(ctx, inner, px); break;
+        default:            draw_wide_weather(ctx, inner, px);  break;
+      }
       break;
-    }
 
     default: break;
   }
@@ -1458,9 +1855,15 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
     int32_t v = t->value->int32;
     // Clamped rather than trusted: an out-of-range value would fall through
     // every switch arm below and silently read as km/h anyway, so say so here.
-    if (v < WIND_UNIT_KMH || v > WIND_UNIT_BFT) v = WIND_UNIT_KMH;
+    if (v < 0 || v >= WIND_UNIT_COUNT) v = WIND_UNIT_KMH;
     s_wind_unit = (WindUnit)v;
     persist_write_int(PERSIST_WIND_UNIT, v);
+  }
+  if ((t = dict_find(iter, KEY_WIDE_SLOT))) {
+    int32_t v = t->value->int32;
+    if (v < 0 || v >= WIDE_COUNT) v = WIDE_WEATHER;
+    s_wide_slot = (WideSlot)v;
+    persist_write_int(PERSIST_WIDE_SLOT, v);
   }
   if ((t = dict_find(iter, KEY_WEEK_REF_DN))) {
     s_week_ref_dn = (long)t->value->int32;
@@ -1494,6 +1897,33 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
   if ((t = dict_find(iter, KEY_WIND_DIR)))     { s_wind_dir = t->value->int32;     persist_write_int(PERSIST_WIND_DIR, s_wind_dir); }
   if ((t = dict_find(iter, KEY_PRECIP_PROB)))  { s_precip_prob = t->value->int32;  persist_write_int(PERSIST_PRECIP_PROB, s_precip_prob); }
   if ((t = dict_find(iter, KEY_OZONE)))        { s_ozone = t->value->int32;        persist_write_int(PERSIST_OZONE, s_ozone); }
+  if ((t = dict_find(iter, KEY_FEELS_LIKE)))   { s_feels_like = t->value->int32;   persist_write_int(PERSIST_FEELS_LIKE, s_feels_like); }
+  if ((t = dict_find(iter, KEY_IS_DAY)))       { s_is_day = (t->value->int32 == 1) ? 1 : 0; persist_write_int(PERSIST_IS_DAY, s_is_day); }
+  if ((t = dict_find(iter, KEY_POLLEN_TIER)))  { s_pollen_tier = t->value->int32;  persist_write_int(PERSIST_POLLEN_TIER, s_pollen_tier); }
+  if ((t = dict_find(iter, KEY_POLLEN_OK)))    { s_pollen_ok = (t->value->int32 == 1); persist_write_int(PERSIST_POLLEN_OK, s_pollen_ok ? 1 : 0); }
+  if ((t = dict_find(iter, KEY_TILE_AVAIL)))   { s_tile_avail = t->value->int32;   persist_write_int(PERSIST_TILE_AVAIL, s_tile_avail); }
+
+  // Music and calendar. Not persisted -- see the persist-key block. An empty
+  // string is a meaningful value here (nothing playing, nothing upcoming), so
+  // these are copied whenever the key is present rather than only when
+  // non-empty.
+  if ((t = dict_find(iter, KEY_MUSIC_TITLE))) {
+    strncpy(s_music_title, t->value->cstring, sizeof(s_music_title) - 1);
+    s_music_title[sizeof(s_music_title) - 1] = '\0';
+  }
+  if ((t = dict_find(iter, KEY_MUSIC_ARTIST))) {
+    strncpy(s_music_artist, t->value->cstring, sizeof(s_music_artist) - 1);
+    s_music_artist[sizeof(s_music_artist) - 1] = '\0';
+  }
+  if ((t = dict_find(iter, KEY_MUSIC_PLAYING))) s_music_playing = (t->value->int32 == 1);
+  if ((t = dict_find(iter, KEY_CAL_TIMES))) {
+    strncpy(s_cal_times, t->value->cstring, sizeof(s_cal_times) - 1);
+    s_cal_times[sizeof(s_cal_times) - 1] = '\0';
+  }
+  if ((t = dict_find(iter, KEY_CAL_TITLE))) {
+    strncpy(s_cal_title, t->value->cstring, sizeof(s_cal_title) - 1);
+    s_cal_title[sizeof(s_cal_title) - 1] = '\0';
+  }
 
   // Slot assignments, range-checked so a stale setting can't index past the
   // content table.
@@ -1616,8 +2046,13 @@ static void init(void) {
   if (persist_exists(PERSIST_DATE_ORDER)) s_date_order_mdy = (persist_read_int(PERSIST_DATE_ORDER) == 1);
   if (persist_exists(PERSIST_WIND_UNIT)) {
     int32_t v = persist_read_int(PERSIST_WIND_UNIT);
-    if (v < WIND_UNIT_KMH || v > WIND_UNIT_BFT) v = WIND_UNIT_KMH;
+    if (v < 0 || v >= WIND_UNIT_COUNT) v = WIND_UNIT_KMH;
     s_wind_unit = (WindUnit)v;
+  }
+  if (persist_exists(PERSIST_WIDE_SLOT)) {
+    int32_t v = persist_read_int(PERSIST_WIDE_SLOT);
+    if (v < 0 || v >= WIDE_COUNT) v = WIDE_WEATHER;
+    s_wide_slot = (WideSlot)v;
   }
   if (persist_exists(PERSIST_WEEK_REF_DN)) s_week_ref_dn = (long)persist_read_int(PERSIST_WEEK_REF_DN);
   if (persist_exists(PERSIST_WEEK_SRC))   s_week_use_csv = (persist_read_int(PERSIST_WEEK_SRC) == 1);
@@ -1652,6 +2087,11 @@ static void init(void) {
   if (persist_exists(PERSIST_WIND_DIR))     s_wind_dir     = persist_read_int(PERSIST_WIND_DIR);
   if (persist_exists(PERSIST_PRECIP_PROB))  s_precip_prob  = persist_read_int(PERSIST_PRECIP_PROB);
   if (persist_exists(PERSIST_OZONE))        s_ozone        = persist_read_int(PERSIST_OZONE);
+  if (persist_exists(PERSIST_FEELS_LIKE))   s_feels_like   = persist_read_int(PERSIST_FEELS_LIKE);
+  if (persist_exists(PERSIST_IS_DAY))       s_is_day       = persist_read_int(PERSIST_IS_DAY);
+  if (persist_exists(PERSIST_POLLEN_TIER))  s_pollen_tier  = persist_read_int(PERSIST_POLLEN_TIER);
+  if (persist_exists(PERSIST_POLLEN_OK))    s_pollen_ok    = (persist_read_int(PERSIST_POLLEN_OK) == 1);
+  if (persist_exists(PERSIST_TILE_AVAIL))   s_tile_avail   = persist_read_int(PERSIST_TILE_AVAIL);
   if (persist_exists(PERSIST_LOCATION))     persist_read_string(PERSIST_LOCATION, s_location, sizeof(s_location));
   {
     const uint32_t pk[4] = { PERSIST_TILE_A, PERSIST_TILE_B, PERSIST_TILE_C, PERSIST_TILE_D };
@@ -1675,6 +2115,24 @@ static void init(void) {
   accel_tap_service_subscribe(accel_tap_handler);
 
   health_service_events_subscribe(health_handler, NULL);
+
+  // manifestVersion 2 lets the user refuse the Health permission outright.
+  // Every read below is already guarded by an accessibility check, so a
+  // refusal breaks nothing -- but it leaves the figures at their defaults,
+  // which would show as a confident "0" steps. Asking the service directly
+  // tells the two apart: NoPermission is a refusal, whereas a merely absent
+  // Available bit can just mean "no data recorded in this range yet", which
+  // is normal at one minute past midnight.
+  {
+    time_t start = time_start_of_today(), end = time(NULL);
+    HealthServiceAccessibilityMask m =
+        health_service_metric_accessible(HealthMetricStepCount, start, end);
+    s_health_denied = (m & HealthServiceAccessibilityMaskNoPermission) != 0;
+    if (s_health_denied) {
+      APP_LOG(APP_LOG_LEVEL_WARNING, "Health permission refused; health tiles show n/a");
+    }
+  }
+
   // Cheap: single aggregate/peek queries against the health service.
   update_steps_data();
   update_sleep_data();
